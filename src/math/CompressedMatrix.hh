@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #ifndef DS_COMPRESSED_MATRIX_HH
@@ -62,6 +52,11 @@ class CompressedMatrix : public Matrix<DoubleType> {
                                     return compressionType_;
                                   }
 
+        void SetSymbolicStatus(SymbolicStatus_t x)
+        {
+          symbolicstatus_ = x;
+        }
+
         SymbolicStatus_t GetSymbolicStatus() const {
                                     return symbolicstatus_;
                                   }
@@ -75,7 +70,7 @@ class CompressedMatrix : public Matrix<DoubleType> {
         const IntVec_t                            &GetRows() const;
         const DoubleVec_t<DoubleType>             &GetReal() const;
         const DoubleVec_t<DoubleType>             &GetImag() const;
-        const ComplexDoubleVec_t<DoubleType>      GetComplex() const;
+        const ComplexDoubleVec_t<DoubleType>      &GetComplex() const;
 
         CompressedMatrix(size_t, MatrixType, CompressionType);
 
@@ -119,8 +114,11 @@ class CompressedMatrix : public Matrix<DoubleType> {
         //// Should these just be one complex vector
         DoubleVec_t<DoubleType> Ax_;
         DoubleVec_t<DoubleType> Az_;
+        mutable ComplexDoubleVec_t<DoubleType> Axz_;
         bool compressed;
         SymbolicStatus_t symbolicstatus_;
+
+        static const inline DoubleType DTZERO{};
 };
 
 }

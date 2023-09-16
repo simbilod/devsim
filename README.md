@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.org/devsim/devsim.svg?branch=master)](https://travis-ci.org/devsim/devsim)
 [![Build status](https://ci.appveyor.com/api/projects/status/github/devsim/devsim?branch=master&svg=true)](https://ci.appveyor.com/project/devsim/devsim)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.03898/status.svg)](https://doi.org/10.21105/joss.03898)
 
 # DEVSIM
 
@@ -16,7 +17,7 @@ The official website is here:
 
 ## Installation:
 
-Binary releases are available at [Zenodo](https://doi.org/10.5281/zenodo.1186952).  Please see [INSTALL.md](INSTALL.md) for installation instructions from binary or source.
+Please see [INSTALL.md](INSTALL.md) for installation instructions from binary or source.  Archived binary releases are available at [Zenodo](https://doi.org/10.5281/zenodo.1186952).
 
 ## Citing This Work:
 
@@ -29,7 +30,7 @@ Please see [LICENSE](LICENSE) and [NOTICE](NOTICE) for license terms.
 
 ## Documentation:
 
-The PDF documentation is located in ``doc/devsim.pdf``.  An online version of the documentation is available at [https://devsim.net](https://devsim.net).  A list of documentation resources is available [online](https://devsim.org/introduction.html#documentation).
+The PDF documentation is located in ``doc/devsim.pdf``.  An online version of the documentation is available at [https://devsim.net](https://devsim.net).  A list of documentation resources is available [online](https://devsim.org/introduction.html#documentation).  Recent changes are available in [CHANGES.md](CHANGES.md).
 
 The repository for the documentation is at [https://github.com/devsim/devsim_documentation](https://github.com/devsim/devsim_documentation).
 
@@ -67,6 +68,7 @@ If you wish to see simulation results, or run the regression tests yourself.  Th
 | --- | --- |
 | [devsim_tests_msys](https://github.com/devsim/devsim_tests_msys) | Windows MSYS Build |
 | [devsim_tests_win64](https://github.com/devsim/devsim_tests_win64) | Windows Visual Studio 2022 Build |
+| [devsim_tests_macos_arm64](https://github.com/devsim/devsim_tests_macos_arm64) | Apple M1 Build |
 | [devsim_tests_macos_gcc_x86_64](https://github.com/devsim/devsim_tests_macos_gcc_x86_64) | macOS Build |
 | [devsim_tests_linux_x86_64](https://github.com/devsim/devsim_tests_linux_x86_64) | Linux |
 

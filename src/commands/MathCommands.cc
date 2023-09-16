@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "MathCommands.hh"
@@ -21,7 +11,10 @@ limitations under the License.
 
 #include "Newton.hh"
 #include "DirectLinearSolver.hh"
+
+#if defined(USE_ITERATIVE_SOLVER)
 #include "IterativeLinearSolver.hh"
+#endif
 
 #include "ContactEquationHolder.hh"
 #include "Region.hh"
@@ -115,8 +108,9 @@ solveCmdImpl(CommandHandler &data)
   const DoubleType absolute_error = data.GetDoubleOption("absolute_error");
   const DoubleType relative_error = data.GetDoubleOption("relative_error");
   const DoubleType maximum_error = data.GetDoubleOption("maximum_error");
-  const int    maximum_iterations = data.GetIntegerOption("maximum_iterations");
-  const int    maximum_divergence = data.GetIntegerOption("maximum_divergence");
+  const int maximum_iterations = data.GetIntegerOption("maximum_iterations");
+  const int maximum_divergence = data.GetIntegerOption("maximum_divergence");
+  const int symbolic_iteration_limit = data.GetIntegerOption("symbolic_iteration_limit");
   const DoubleType frequency = data.GetDoubleOption("frequency");
   const std::string &outputNode = data.GetStringOption("output_node");
 
@@ -127,6 +121,7 @@ solveCmdImpl(CommandHandler &data)
   solver.SetMaxIter(maximum_iterations);
   solver.SetMaxDiv(maximum_divergence);
   solver.SetMaxAbsError(maximum_error);
+  solver.SetSymbolicIterationLimit(static_cast<size_t>(symbolic_iteration_limit));
 
   std::unique_ptr<dsMath::LinearSolver<DoubleType>> linearSolver;
 
@@ -136,7 +131,15 @@ solveCmdImpl(CommandHandler &data)
   }
   else if (solver_type == "iterative")
   {
+#if defined(USE_ITERATIVE_SOLVER)
     linearSolver = std::unique_ptr<dsMath::LinearSolver<DoubleType>>(new dsMath::IterativeLinearSolver<DoubleType>);
+#else
+    std::ostringstream os;
+    os << "\"iterative\" is not a supported simulation type in this build\n";
+    errorString = os.str();
+    data.SetErrorResult(errorString);
+    return;
+#endif
   }
   else
   {
@@ -223,6 +226,7 @@ solveCmd(CommandHandler &data)
     {"maximum_error",      "MAXDOUBLE", dsGetArgs::optionType::FLOAT, dsGetArgs::requiredType::OPTIONAL},
     {"maximum_iterations", "20", dsGetArgs::optionType::INTEGER, dsGetArgs::requiredType::OPTIONAL},
     {"maximum_divergence", "20", dsGetArgs::optionType::INTEGER, dsGetArgs::requiredType::OPTIONAL},
+    {"symbolic_iteration_limit", "1", dsGetArgs::optionType::INTEGER, dsGetArgs::requiredType::OPTIONAL},
     {"frequency",    "0.0", dsGetArgs::optionType::FLOAT, dsGetArgs::requiredType::OPTIONAL},
     {"output_node",  "", dsGetArgs::optionType::STRING, dsGetArgs::requiredType::OPTIONAL},
     {"solver_type",  "direct", dsGetArgs::optionType::STRING, dsGetArgs::requiredType::OPTIONAL},
@@ -517,15 +521,5 @@ setInitialConditionCmd(CommandHandler &data)
   }
   data.SetEmptyResult();
 }
-
-Commands MathCommands[] = {
-    {"get_contact_current",  getContactCurrentCmd},
-    {"get_contact_charge",   getContactCurrentCmd},
-    {"solve",                solveCmd},
-    {"get_matrix_and_rhs",   getMatrixAndRHSCmd},
-    {"set_initial_condition", setInitialConditionCmd},
-    {nullptr, nullptr}
-};
-
 }
 

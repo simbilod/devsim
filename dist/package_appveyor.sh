@@ -26,6 +26,7 @@ DIST_VER=${DIST_DIR}
 SYMDIFF_LIBRARY_DIR=../external/symdiff/lib/symdiff
 SYMDIFF_EXAMPLES_DIR=../external/symdiff/examples
 SYMDIFF_DOCUMENTATION_DIR=../external/symdiff/doc
+UMFPACK_LIBRARY_FILE=../external/umfpack_lgpl/${ARCH}/umfpack_lgpl.dll
 
 # make the bin directory and copy binary in
 mkdir -p ${DIST_BIN}
@@ -66,6 +67,10 @@ do
 cp -R ../$i ${DIST_DIR}
 done
 cp -R ../python_packages ${DIST_PYDLL}
+cp -R ../umfpack ${DIST_PYDLL}/umfpack
+
+# Copy UMFPACK DLL
+cp -v ${UMFPACK_LIBRARY_FILE} ${DIST_PYDLL}/umfpack
 
 mkdir -p ${DIST_DIR}/examples/symdiff
 # add trailing slash for rsync

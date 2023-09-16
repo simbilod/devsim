@@ -3,8 +3,8 @@ SET (EXTERNAL_LIB ${PROJECT_SOURCE_DIR}/external)
 SET (FLEX /usr/bin/flex)
 SET (BISON /usr/bin/bison)
 
-SET (BOOST_INCLUDE ${EXTERNAL_LIB}/boostorg/math/include ${EXTERNAL_LIB}/boostorg/multiprecision/include)
-ADD_DEFINITIONS(-DBOOST_MP_STANDALONE -DBOOST_MP_MATH_AVAILABLE)
+SET (BOOST_INCLUDE ${EXTERNAL_LIB}/boostorg/config/include ${EXTERNAL_LIB}/boostorg/math/include ${EXTERNAL_LIB}/boostorg/multiprecision/include)
+ADD_DEFINITIONS(-DBOOST_MP_STANDALONE -DBOOST_MATH_STANDALONE)
 
 SET (QUADMATH_ARCHIVE "-lquadmath")
 
@@ -18,10 +18,6 @@ SET (MKL_LIB_DIR         ${TMPLIBPATH})
 SET (BLAS_ARCHIVE -L${MKL_LIB_DIR} -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl)
 SET (EXTENDED_BLAS_ARCHIVE ${EXTERNAL_LIB}/getrf/build/libgetrf.a)
 
-
-SET (SUPERLULOCATE  ${EXTERNAL_LIB}/superlu)
-SET (SUPERLU_INCLUDE ${SUPERLULOCATE}/SRC)
-SET (SUPERLU_ARCHIVE ${SUPERLULOCATE}/build/SRC/libsuperlu.a)
 
 SET (SQLITE3_INCLUDE )
 SET (SQLITE3_ARCHIVE -lsqlite3)

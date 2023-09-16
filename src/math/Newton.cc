@@ -2,48 +2,30 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "Newton.hh"
-#include "LinearSolver.hh"
 #include "Permutation.hh"
 #include "MatrixEntries.hh"
 #include "GlobalData.hh"
 #include "InstanceKeeper.hh"
 #include "NodeKeeper.hh"
 #include "CompressedMatrix.hh"
-#include "SuperLUPreconditioner.hh"
+#include "Preconditioner.hh"
+#include "SolverUtil.hh"
+#include "LinearSolver.hh"
 #include "Device.hh"
 #include "Region.hh"
 #include "EquationHolder.hh"
 #include "OutputStream.hh"
 #include "dsAssert.hh"
 
-#include "BlockPreconditioner.hh"
-#include "IterativeLinearSolver.hh"
 #include "TimeData.hh"
 
 #include "ObjectHolder.hh"
 #include "Interpreter.hh"
 #include "dsTimer.hh"
-#include "BlasHeaders.hh"
-
-//#undef USE_MKL_PARDISO
-
-#ifdef USE_MKL_PARDISO
-#include "MKLPardisoPreconditioner.hh"
-#endif
 
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
@@ -53,6 +35,7 @@ limitations under the License.
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <cstdlib>
 using std::abs;
 
 namespace dsMath {
@@ -494,193 +477,6 @@ void Newton<DoubleType>::BackupSolutions()
   }
 }
 
-namespace {
-enum class DirectSolver {
-  UNKNOWN,
-
-  MKLPARDISO,
-  SUPERLU
-};
-
-DirectSolver GetDirectSolver()
-{
-  DirectSolver ret = DirectSolver::UNKNOWN;
-  GlobalData &gdata = GlobalData::GetInstance();
-  auto dbent = gdata.GetDBEntryOnGlobal("direct_solver");
-  if (dbent.first)
-  {
-    const auto &val = dbent.second.GetString();
-    if (val == "superlu")
-    {
-      ret = DirectSolver::SUPERLU;
-    }
-    else if (val == "mkl_pardiso")
-    {
-#ifdef USE_MKL_PARDISO
-      ret = DirectSolver::MKLPARDISO;
-#else
-      ret = DirectSolver::SUPERLU;
-      std::ostringstream os;
-      os << "Solver \"mkl_pardiso\" not supported in this build.  Switching to \"superlu\".\n";
-      OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-#endif
-    }
-    else
-    {
-      std::ostringstream os;
-      os << "Unrecognized \"direct_solver\" parameter value \"" << val << "\". Valid options are \"mkl_pardiso\" or \"superlu\".\n";
-      OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-    }
-  }
-  if (ret != DirectSolver::UNKNOWN)
-  {
-    return ret;
-  }
-
-  std::ostringstream os;
-  os << "Parameter \"direct_solver\" parameter not set. Valid options are \"mkl_pardiso\" or \"superlu\".\n";
-#if defined(USE_EXPLICIT_MATH_LOAD)
-  if (MathLoader::IsMKLLoaded())
-  {
-    os << "Using \"mkl_pardiso\" direct solver.\n";
-    ret = DirectSolver::MKLPARDISO;
-  }
-  else
-  {
-    os << "Using \"superlu\" direct solver.\n";
-    ret = DirectSolver::SUPERLU;
-  }
-#elif defined(USE_MKL_PARDISO)
-  os << "Using \"mkl_pardiso\" direct solver.\n";
-  ret = DirectSolver::MKLPARDISO;
-#else
-  os << "Using \"superlu\" direct solver.\n";
-  ret = DirectSolver::SUPERLU;
-#endif
-  OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-  return ret;
-}
-
-Preconditioner<double> *CreatePreconditioner(LinearSolver<double> &itermethod, size_t numeqns)
-{
-  Preconditioner<double> *preconditioner = nullptr;
-  if (dynamic_cast<IterativeLinearSolver<double> *>(&itermethod))
-  {
-    preconditioner = new BlockPreconditioner<double>(numeqns, PEnum::TransposeType_t::NOTRANS);
-  }
-  else
-  {
-    if (auto s = GetDirectSolver(); s == DirectSolver::SUPERLU)
-    {
-      preconditioner = new SuperLUPreconditioner<double>(numeqns, PEnum::TransposeType_t::NOTRANS, PEnum::LUType_t::FULL);
-    }
-#ifdef USE_MKL_PARDISO
-    else if (s == DirectSolver::MKLPARDISO)
-    {
-      preconditioner = new MKLPardisoPreconditioner<double>(numeqns, PEnum::TransposeType_t::NOTRANS);
-    }
-#endif
-    else
-    {
-      dsAssert(false, "Unexpected Solver Type");
-    }
-  }
-  return preconditioner;
-}
-
-#ifdef DEVSIM_EXTENDED_PRECISION
-Preconditioner<float128> *CreatePreconditioner(LinearSolver<float128> &itermethod, size_t numeqns)
-{
-  Preconditioner<float128> *preconditioner = nullptr;
-  if (dynamic_cast<IterativeLinearSolver<float128> *>(&itermethod))
-  {
-    preconditioner = new BlockPreconditioner<float128>(numeqns, PEnum::TransposeType_t::NOTRANS);
-  }
-  else
-  {
-    if (auto s = GetDirectSolver(); s == DirectSolver::SUPERLU)
-    {
-      preconditioner = new SuperLUPreconditioner<float128>(numeqns, PEnum::TransposeType_t::NOTRANS, PEnum::LUType_t::FULL);
-    }
-#ifdef USE_MKL_PARDISO
-    else if (s == DirectSolver::MKLPARDISO)
-    {
-      preconditioner = new MKLPardisoPreconditioner<float128>(numeqns, PEnum::TransposeType_t::NOTRANS);
-    }
-#endif
-    else
-    {
-      dsAssert(false, "Unexpected Solver Type");
-    }
-  }
-  return preconditioner;
-}
-#endif
-
-template <typename DoubleType>
-Preconditioner<DoubleType> *CreateACPreconditioner(PEnum::TransposeType_t trans_type, size_t numeqns)
-{
-    Preconditioner<DoubleType> *preconditioner = nullptr;
-    if (auto s = GetDirectSolver();  s == DirectSolver::SUPERLU)
-    {
-      preconditioner = new SuperLUPreconditioner<DoubleType>(numeqns, trans_type, PEnum::LUType_t::FULL);
-    }
-#ifdef USE_MKL_PARDISO
-    else if (s == DirectSolver::MKLPARDISO)
-    {
-      preconditioner = new MKLPardisoPreconditioner<DoubleType>(numeqns, trans_type);
-    }
-#endif
-    else
-    {
-      dsAssert(false, "Unexpected Solver Type");
-    }
-    return preconditioner;
-}
-
-template <typename DoubleType>
-CompressedMatrix<DoubleType> *CreateMatrix(Preconditioner<DoubleType> *preconditioner, bool is_complex=false)
-{
-  const auto numeqns = preconditioner->size();
-
-  auto matrix_type = MatrixType::REAL;
-  if (is_complex)
-  {
-    matrix_type = MatrixType::COMPLEX;
-  }
-
-  auto compression_type = CompressionType::CCM;
-
-  if (dynamic_cast<SuperLUPreconditioner<DoubleType> *>(preconditioner))
-  {
-    compression_type = CompressionType::CCM;
-  }
-  else if (dynamic_cast<BlockPreconditioner<DoubleType> *>(preconditioner))
-  {
-    compression_type = CompressionType::CCM;
-  }
-#ifdef USE_MKL_PARDISO
-  else if (dynamic_cast<MKLPardisoPreconditioner<DoubleType> *>(preconditioner))
-  {
-    compression_type = CompressionType::CCM;
-  }
-#endif
-  else
-  {
-    dsAssert(0, "UNEXPECTED");
-  }
-
-  return new CompressedMatrix<DoubleType>(numeqns, matrix_type, compression_type);
-
-}
-
-template <typename DoubleType>
-CompressedMatrix<DoubleType> *CreateACMatrix(Preconditioner<DoubleType> *preconditioner)
-{
-  return CreateMatrix(preconditioner, true);
-}
-
-}
 
 namespace {
 void CallUpdateSolution(NodeKeeper &nk, const std::string &name, std::vector<double> &result)
@@ -866,6 +662,8 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
 
   ObjectHolderList_t iteration_list;
 
+  const size_t symbolic_iter_max = (std::getenv("DEVSIM_NEW_SYMBOLIC") == nullptr) ? symbolicIterationLimit : size_t(-1);
+
   for (size_t iter = 0; (iter < maxiter) && (!converged) && (divergence_count < maxDivergenceCount); ++iter)
   {
     if (max_error_hit)
@@ -907,6 +705,15 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
     matrix->Finalize();
 
 //        std::cerr << "Begin Solve Matrix\n";
+    // iter is 0 based
+    if (iter < symbolic_iter_max)
+    {
+      if (auto cm = dynamic_cast<CompressedMatrix<DoubleType> *>(matrix.get()); cm)
+      {
+        cm->SetSymbolicStatus(SymbolicStatus_t::NEW_SYMBOLIC);
+      }
+    }
+
     bool solveok = itermethod.Solve(*matrix, *preconditioner, result, rhs);
     if (!solveok)
     {

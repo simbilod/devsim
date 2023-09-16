@@ -24,6 +24,7 @@ DIST_VER=${DIST_DIR}
 SYMDIFF_LIBRARY_DIR=../external/symdiff/lib/symdiff
 SYMDIFF_EXAMPLES_DIR=../external/symdiff/examples
 SYMDIFF_DOCUMENTATION_DIR=../external/symdiff/doc
+UMFPACK_LIBRARY_FILE=../external/umfpack_lgpl/build/libumfpack_lgpl.dylib
 
 # make the bin directory and copy binary in
 # Assume libstdc++ is a standard part of the system
@@ -103,6 +104,8 @@ fi
 # keep a copy of unstripped binary
 #cp ${SRC_BIN} ${DIST_VER}_unstripped
 
+cp -vf ${UMFPACK_LIBRARY_FILE} ${DIST_PYDLL}
+
 
 mkdir -p ${DIST_DIR}/doc
 cp ../doc/devsim.pdf ${DIST_DIR}/doc
@@ -120,6 +123,10 @@ do
 rsync -aqP --delete ../$i ${DIST_DIR}
 done
 rsync -aqP --delete ../python_packages ${DIST_PYDLL}
+rsync -aqP --delete ../umfpack ${DIST_PYDLL}
+
+# Copy UMFPACK DLL
+cp -vf ${UMFPACK_LIBRARY_FILE} ${DIST_PYDLL}/umfpack
 
 mkdir -p ${DIST_DIR}/examples/symdiff
 # add trailing slash for rsync

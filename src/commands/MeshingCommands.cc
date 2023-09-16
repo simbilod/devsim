@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "MeshingCommands.hh"
@@ -159,6 +149,30 @@ deleteMeshCmd(CommandHandler &data)
       return;
     }
     data.SetEmptyResult();
+}
+
+void
+getMeshListCmd(CommandHandler &data)
+{
+    std::string errorString;
+
+    using namespace dsGetArgs;
+    static dsGetArgs::Option option[] = {
+        {nullptr,   nullptr, dsGetArgs::optionType::STRING, dsGetArgs::requiredType::OPTIONAL, nullptr}
+    };
+
+    bool error = data.processOptions(option, errorString);
+
+    if (error)
+    {
+        data.SetErrorResult(errorString);
+        return;
+    }
+
+    dsMesh::MeshKeeper &mdata = dsMesh::MeshKeeper::GetInstance();
+    const auto &meshList = mdata.GetMeshList();
+
+    data.SetStringListResult(GetKeys(meshList));
 }
 
 void
@@ -1282,31 +1296,5 @@ void createInterfaceFromNodesCmd(CommandHandler &data)
   dev->AddInterface(interface);
   data.SetEmptyResult();
 }
-
-Commands MeshingCommands[] = {
-    {"add_1d_contact",    add1dContactCmd},
-    {"add_1d_interface",  add1dInterfaceCmd},
-    {"add_1d_mesh_line",  add1dMeshLineCmd},
-    {"add_1d_region",     add1dRegionCmd},
-    {"add_2d_contact",    add2dContactCmd},
-    {"add_2d_interface",  add2dInterfaceCmd},
-    {"add_2d_mesh_line",  add2dMeshLineCmd},
-    {"add_2d_region",     add2dRegionCmd},
-    {"add_gmsh_contact", addGmshContactCmd},
-    {"add_gmsh_interface", addGmshInterfaceCmd},
-    {"add_gmsh_region", addGmshRegionCmd},
-    {"create_1d_mesh",    create1dMeshCmd},
-    {"create_2d_mesh",    create1dMeshCmd},
-    {"create_contact_from_interface", createContactFromInterfaceCmd},
-    {"create_device",     createDeviceCmd},
-    {"create_gmsh_mesh", createGmshMeshCmd},
-    {"create_interface_from_nodes", createInterfaceFromNodesCmd},
-    {"delete_device",     deleteDeviceCmd},
-    {"delete_mesh",       deleteMeshCmd},
-    {"finalize_mesh",     finalizeMeshCmd},
-    {"load_devices",   loadDevicesCmd},
-    {"write_devices",  writeDevicesCmd},
-    {nullptr, nullptr}
-};
 }
 

@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "ModelExprEval.hh"
@@ -32,7 +22,9 @@ limitations under the License.
 
 #include "FPECheck.hh"
 
+#if defined(USE_MATERIALDB)
 #include "MaterialDB.hh"
+#endif
 
 #include "ObjectCache.hh"
 
@@ -219,7 +211,9 @@ ModelExprData<DoubleType> ModelExprEval<DoubleType>::EvaluateVariableType(Eqo::E
   ModelExprData<DoubleType> out;
 
   GlobalData &gd  = GlobalData::GetInstance();
+#if defined(USE_MATERIALDB)
   MaterialDB &mdb = MaterialDB::GetInstance();
+#endif
   NodeKeeper &nk = NodeKeeper::instance();
 
   const std::string &nm = EngineAPI::getName(arg);
@@ -227,13 +221,16 @@ ModelExprData<DoubleType> ModelExprEval<DoubleType>::EvaluateVariableType(Eqo::E
    * Get the DB entry here
    */
   const GlobalData::DoubleDBEntry_t &gdbent  = gd.GetDoubleDBEntryOnRegion(data_ref, nm);
+#if defined(USE_MATERIALDB)
   const MaterialDB::DoubleDBEntry_t &mdbentr = mdb.GetDoubleDBEntry(data_ref->GetMaterialName(), nm);
   const MaterialDB::DoubleDBEntry_t &mdbentg = mdb.GetDoubleDBEntry("global", nm);
+#endif
 
   if (gdbent.first)
   {
     out = ModelExprData<DoubleType>(gdbent.second, data_ref);
   }
+#if defined(USE_MATERIALDB)
   else if (mdbentr.first)
   {
     out = ModelExprData<DoubleType>(mdbentr.second, data_ref);
@@ -242,6 +239,7 @@ ModelExprData<DoubleType> ModelExprEval<DoubleType>::EvaluateVariableType(Eqo::E
   {
     out = ModelExprData<DoubleType>(mdbentg.second, data_ref);
   }
+#endif
   else if (nk.IsCircuitNode(nm))
   {
     const DoubleType val = nk.GetNodeValue("dcop", nm);

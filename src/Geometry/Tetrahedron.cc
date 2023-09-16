@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "Tetrahedron.hh"
@@ -68,7 +58,7 @@ const std::vector<ConstNodePtr> &Tetrahedron::GetFENodeList() const
 
 
 template <typename DoubleType>
-Vector<DoubleType> GetCenter(const std::vector<ConstNodePtr> &nodes)
+Vector<DoubleType> GetTetrahedronCenter(const std::vector<ConstNodePtr> &nodes)
 {
   const Vector<DoubleType> &v0 = ConvertPosition<DoubleType>(nodes[0]->Position());
 
@@ -115,16 +105,16 @@ Vector<DoubleType> GetCenter(const Tetrahedron &tet)
 {
   const std::vector<ConstNodePtr> &nodes = tet.GetNodeList();
 
-  return GetCenter<DoubleType>(nodes);
+  return GetTetrahedronCenter<DoubleType>(nodes);
 }
 
 
-template Vector<double> GetCenter(const std::vector<ConstNodePtr> &nodes);
+template Vector<double> GetTetrahedronCenter(const std::vector<ConstNodePtr> &nodes);
 template Vector<double> GetCenter(const Tetrahedron &tet);
 
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
-template Vector<float128> GetCenter(const std::vector<ConstNodePtr> &nodes);
+template Vector<float128> GetTetrahedronCenter(const std::vector<ConstNodePtr> &nodes);
 template Vector<float128> GetCenter(const Tetrahedron &tet);
 #endif
 

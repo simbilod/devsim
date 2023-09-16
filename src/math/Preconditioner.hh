@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #ifndef PRECONDITIONER_HH
@@ -21,6 +11,7 @@ limitations under the License.
 namespace dsMath {
 template <typename DoubleType>
 class Matrix;
+enum class CompressionType;
 
 namespace PEnum {
 enum class TransposeType_t {NOTRANS, TRANS};
@@ -31,7 +22,8 @@ template <typename DoubleType>
 class Preconditioner {
   public:
     virtual ~Preconditioner() = 0;
-
+    virtual dsMath::CompressionType GetRealMatrixCompressionType() const = 0;
+    virtual dsMath::CompressionType GetComplexMatrixCompressionType() const = 0;
 
     Preconditioner(size_t /*numeqns*/, PEnum::TransposeType_t /*tranpose*/);
     bool LUFactor(Matrix<DoubleType> *);     // Factor the matrix

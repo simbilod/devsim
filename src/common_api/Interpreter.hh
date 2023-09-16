@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #ifndef DS_INTERPRETER
@@ -28,22 +18,10 @@ class Interpreter
     ~Interpreter();
 
 public:
-#if 0
-    bool RunCommand(std::vector<ObjectHolder> &/*command*/);
-#endif
     bool RunCommand(ObjectHolder & /*command*/, std::vector<ObjectHolder> &/*arguments*/);
-#if 0
-    bool RunCommand(const std::string &/*command*/, const std::vector<std::string> &/*arguments*/);
-#endif
     bool RunInternalCommand(const std::string &/*command*/, const std::vector<std::pair<std::string, ObjectHolder> > &/*arguments*/);
+    bool RunCommand(ObjectHolder & /*command*/, ObjectHolderMap_t &/*arguments*/);
 
-private:
-    bool RunCommand(const std::string &/*command*/, const std::vector<std::pair<std::string, ObjectHolder> > &/*arguments*/);
-#if 0
-    bool RunCommand(const std::string &/*command*/);
-#endif
-
-public:
     const std::string &GetErrorString() const
     {
       return error_string_;
@@ -57,6 +35,7 @@ public:
     std::string GetVariable(const std::string &name);
 
   private:
+    bool RunCommand(const std::string &/*command*/, ObjectHolderMap_t &/*arguments*/);
 
     Interpreter &operator=(const Interpreter &);
     Interpreter(const Interpreter &);

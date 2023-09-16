@@ -2,31 +2,18 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "GlobalData.hh"
 #include "DefaultDerivatives.hh"
 #include "FPECheck.hh"
 #include "ObjectHolder.hh"
+#if defined(LOAD_MATHLIBS)
 #include "BlasHeaders.hh"
+#endif
 #include "OutputStream.hh"
 #include <sstream>
-
-extern "C"
-{
-extern const char * devsim_superluversion;
-}
 
 void devsim_initialization()
 {
@@ -45,17 +32,17 @@ void devsim_initialization()
     features["extended_precision"] = ObjectHolder(false);
 #endif
     ObjectHolderList_t solvers;
-#ifdef USE_MKL_PARDISO
+#if defined (USE_MKL_PARDISO)
     solvers.push_back(ObjectHolder("mkl_pardiso"));
-#else
-    solvers.push_back(ObjectHolder("superlu"));
-    features["direct_solver"] = ObjectHolder(solvers);
 #endif
+#if defined (USE_SUPERLU_PRECONDITIONER)
+    solvers.push_back(ObjectHolder("superlu"));
+#endif
+    features["direct_solver"] = ObjectHolder(solvers);
     features["license"] = ObjectHolder("Apache License, Version 2.0");
     features["website"] = ObjectHolder("https://devsim.org");
 
-#ifdef USE_EXPLICIT_MATH_LOAD
-    features["explicit_math_load"] = ObjectHolder(true);
+#if defined(LOAD_MATHLIBS)
     std::string errors;
     auto ret = MathLoader::LoadMathLibraries(errors);
     if (ret == MathLoader::LoaderMessages_t::MKL_LOADED)
@@ -65,7 +52,7 @@ void devsim_initialization()
     }
     else if (ret == MathLoader::LoaderMessages_t::MATH_LOADED)
     {
-      gdata.AddDBEntryOnGlobal("direct_solver", ObjectHolder("superlu"));
+      gdata.AddDBEntryOnGlobal("direct_solver", ObjectHolder("unknown"));
     }
     else
     {
@@ -74,19 +61,12 @@ void devsim_initialization()
       OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, errors);
     }
-#else
-    features["explicit_math_load"] = ObjectHolder(false);
-#endif
-    features["superlu_version"] = ObjectHolder(devsim_superluversion);
-
-    gdata.AddDBEntryOnGlobal("info", ObjectHolder(features));
-
-#ifndef USE_EXPLICIT_MATH_LOAD
-#ifdef USE_MKL_PARDISO
-    gdata.AddDBEntryOnGlobal("direct_solver", ObjectHolder("mkl_pardiso"));
-#else
+    features["math_libraries"] = CreateObjectHolderList(MathLoader::GetLoadedMathDLLs());
+#elif defined(USE_SUPERLU_PRECONDITIONER)
     gdata.AddDBEntryOnGlobal("direct_solver", ObjectHolder("superlu"));
 #endif
-#endif
+
+    gdata.AddDBEntryOnGlobal("info", ObjectHolder(features));
+    gdata.AddDBEntryOnGlobal("symbolic_iteration_limit", ObjectHolder(1));
 }
 

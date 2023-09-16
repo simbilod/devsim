@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2018 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 
@@ -23,19 +13,13 @@ limitations under the License.
 #include <utility>
 #include <complex>
 #include <vector>
-#if defined(USE_EXPLICIT_MATH_LOAD)
+
 extern "C" {
 void PARDISO( void *a, const int *b, const int *c, const int *d,
                    const int *e, const int *f, const void *g, const int *h,
                    const int *i, int *j, const int *k, int *l,
                    const int *m, void *n,    void *o, int *p);
 }
-#else
-#include "mkl.h"
-#include "mkl_pardiso.h"
-#include "mkl_types.h"
-#include "mkl_spblas.h"
-#endif
 
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
@@ -211,13 +195,8 @@ bool MKLPardisoData::LUFactorMatrixImpl(CompressedMatrix<DoubleType> *cm, const 
 #endif
 
   SetComplex(cm);
-  // TODO: CONSIDER LU TYPE
-  // TODO: Assert matrix size
   const IntVec_t    &Rows = cm->GetRows();
   const IntVec_t    &Cols = cm->GetCols();
-  //dsAssert(Vals.size() == Cols.size(), "UNEXPECTED");
-
-  // TODO: symbolic factorization, need to determine if this is worth reusing each time
 
 #ifdef USE_CCM
   ja = &Rows[0];
@@ -228,15 +207,22 @@ bool MKLPardisoData::LUFactorMatrixImpl(CompressedMatrix<DoubleType> *cm, const 
 #endif
   a  = a_input;
 
-  phase = 11;
-  PARDISO (pt, &maxfct, &mnum, &mtype, &phase,
-           &n, a, ia, ja, &idum, &nrhs, &iparm[0], &msglvl, &ddum, &ddum, &error);
+  if (cm->GetSymbolicStatus() == SymbolicStatus_t::NEW_SYMBOLIC)
+  {
+    phase = 11;
+    PARDISO (pt, &maxfct, &mnum, &mtype, &phase,
+             &n, a, ia, ja, &idum, &nrhs, &iparm[0], &msglvl, &ddum, &ddum, &error);
+  }
+  else if (cm->GetSymbolicStatus() == SymbolicStatus_t::SAME_SYMBOLIC)
+  {
+    error = 0;
+  }
+  else
+  {
+    dsAssert(false, "UNEXPECTED");
+    error = 0;
+  }
 
-#if 0
-      std::ostringstream os;
-      os << "Symbolic Error: " << error << "\n";
-      OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-#endif
   if (error != 0)
   {
     // print message
@@ -379,7 +365,6 @@ MKLPardisoPreconditioner<DoubleType>::MKLPardisoPreconditioner(size_t sz, PEnum:
 {
   mklpardisodata_ = new MKLPardisoData(sz);
 
-// TODO: move this to LUFactor
   if (transpose == PEnum::TransposeType_t::TRANS)
   {
     mklpardisodata_->SetTranspose(true);
@@ -388,6 +373,18 @@ MKLPardisoPreconditioner<DoubleType>::MKLPardisoPreconditioner(size_t sz, PEnum:
   {
     mklpardisodata_->SetTranspose(false);
   }
+}
+
+template <typename DoubleType>
+dsMath::CompressionType MKLPardisoPreconditioner<DoubleType>::GetRealMatrixCompressionType() const
+{
+  return dsMath::CompressionType::CCM;
+}
+
+template <typename DoubleType>
+dsMath::CompressionType MKLPardisoPreconditioner<DoubleType>::GetComplexMatrixCompressionType() const
+{
+  return dsMath::CompressionType::CCM;
 }
 
 template <typename DoubleType>

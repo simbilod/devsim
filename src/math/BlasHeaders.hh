@@ -2,25 +2,19 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
+
+#if !defined(LOAD_MATHLIBS)
+#error "Do not include if LOAD_MATHLIBS is not set"
+#endif
 
 #ifndef BLASHEADERS_HH
 #define BLASHEADERS_HH
 #include <complex>
 
-#ifdef USE_EXPLICIT_MATH_LOAD
 #include <string>
+#include <vector>
 namespace MathLoader {
 // MKL_LOADED implies MKL Functions Loaded
 enum class LoaderMessages_t {NO_ENVIRONMENT, MISSING_DLL, MISSING_SYMBOLS, MATH_LOADED, MKL_LOADED};
@@ -33,8 +27,8 @@ bool IsMathLoaded();
 bool IsMKLLoaded();
 LoaderMessages_t GetMathStatus();
 std::string GetMKLVersion();
+std::vector<std::string> GetLoadedMathDLLs();
 }
-#endif
 
 void getrf( int *m, int *n, double *a, int *lda, int *ipiv, int *info );
 

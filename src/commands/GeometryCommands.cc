@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "GeometryCommands.hh"
@@ -32,12 +22,42 @@ limitations under the License.
 #include "Triangle.hh"
 #include "Edge.hh"
 #include "Node.hh"
+#include "OutputStream.hh"
 
 #include <sstream>
 
 using namespace dsValidate;
 
+void devsim_initialization();
+void ResetAllData();
 namespace dsCommand {
+
+void resetDevsimCmd (CommandHandler &data)
+{
+    std::string errorString;
+
+    /// Will need someway of setting circuit node
+    /// (This would be on the contact and not the contact equation??)
+    static dsGetArgs::Option option[] =
+    {
+        {nullptr,  nullptr, dsGetArgs::optionType::STRING, dsGetArgs::requiredType::OPTIONAL, nullptr}
+    };
+
+    bool error = data.processOptions(option, errorString);
+
+    if (error)
+    {
+        data.SetErrorResult(errorString);
+        return;
+    }
+
+    OutputStream::WriteOut(OutputStream::OutputType::INFO, "Resetting DEVSIM\n");
+    ResetAllData();
+    devsim_initialization();
+    data.SetEmptyResult();
+    return;
+}
+
 /// Get the list of all the devices currently loaded
 /// There is only an error if there are no devices
 void getDeviceListCmd(CommandHandler &data)
@@ -396,16 +416,6 @@ getElementNodeListCmd(CommandHandler &data)
     data.SetObjectResult(ObjectHolder(olist));
 
 }
-
-Commands GeometryCommands[] = {
-    {"get_device_list",             getDeviceListCmd},
-    {"get_region_list",             getRegionListCmd},
-    {"get_interface_list",          getRegionListCmd},
-    {"get_contact_list",            getRegionListCmd},
-    {"get_element_node_list",       getElementNodeListCmd},
-    {nullptr, nullptr}
-};
-
 }
 
 

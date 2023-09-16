@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 /// Python is insisting on defined _POSIX_C_SOURCE and _X_OPEN_SOURCE
@@ -327,6 +317,13 @@ template <typename T>
 struct pod_info;
 
 template <>
+struct pod_info<std::complex<double>>
+{
+  [[maybe_unused]] constexpr static auto pmf = nullptr;
+  [[maybe_unused]] constexpr static const char *ptype = "d";
+};
+
+template <>
 struct pod_info<double>
 {
   constexpr static auto pmf = &ObjectHolder::GetDouble;
@@ -340,12 +337,13 @@ struct pod_info<int>
   constexpr static const char *ptype = "i";
 };
 
-
+#if defined(_WIN32) || (UINTPTR_MAX > UINT_MAX)
 template <>
 struct pod_info<ptrdiff_t>
 {
   constexpr static auto pmf = &ObjectHolder::GetLong;
 };
+#endif
 
 template <typename T>
 bool GetFromList(const ObjectHolder &oh, std::vector<T> &values)
@@ -358,6 +356,7 @@ bool GetFromList(const ObjectHolder &oh, std::vector<T> &values)
   {
     values.resize(objs.size());
     ok = true;
+    dsAssert(pod_info<T>::pmf, "helper function not implemented");
     for (size_t i = 0; i < objs.size(); ++i)
     {
       const auto &ent = (objs[i].*pod_info<T>::pmf)();
@@ -479,16 +478,22 @@ void convert_to_unsigned(const std::vector<T> &in, std::vector<U> &out)
 
 bool ObjectHolder::GetDoubleList(std::vector<double> &values) const
 {
-  if (!GetArrayFromBytes<double>(*this, values, "d", sizeof(double)))
+  if (!GetArrayFromBytes<double>(*this, values, pod_info<double>::ptype, sizeof(double)))
   {
     return GetFromList<double>(*this, values);
   }
   return true;
 }
 
+bool ObjectHolder::GetComplexDoubleList(std::vector<std::complex<double>> &values) const
+{
+  bool ret = GetArrayFromBytes<std::complex<double>>(*this, values, pod_info<double>::ptype, sizeof(double));
+  return ret;
+}
+
 bool ObjectHolder::GetIntegerList(std::vector<int> &values) const
 {
-#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_WIN32)
+#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_WIN32) || (UINTPTR_MAX == UINT_MAX)
   static_assert(sizeof(long) == sizeof(int), "wrong sizeof(long)");
   const std::string search("iIlL");
 #elif defined(__linux__) || defined(__APPLE__)
@@ -506,7 +511,7 @@ bool ObjectHolder::GetIntegerList(std::vector<int> &values) const
 
 bool ObjectHolder::GetLongList(std::vector<ptrdiff_t> &values) const
 {
-#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_WIN32)
+#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_WIN32) || (UINTPTR_MAX == UINT_MAX)
   static_assert(sizeof(long) == sizeof(int), "wrong sizeof(long)");
   const std::string search("qQ");
 #elif defined(__linux__) || defined(__APPLE__)
@@ -515,6 +520,7 @@ bool ObjectHolder::GetLongList(std::vector<ptrdiff_t> &values) const
 #else
 #error "FIX TYPE"
 #endif
+
   if (!GetArrayFromBytes<ptrdiff_t>(*this, values, search, sizeof(ptrdiff_t)))
   {
     return GetFromList<ptrdiff_t>(*this, values);
@@ -681,12 +687,17 @@ ObjectHolder CreateArrayObject(const char *s, const ObjectHolder &data_object)
   return result;
 }
 
+template <typename T>
+ObjectHolder CreatePODArray(const T *data, size_t length)
+{
+  return CreateArrayObject(pod_info<T>::ptype, ObjectHolder(data, length));
+}
 
 template <typename T>
 ObjectHolder CreatePODArray(const std::vector<T> &list)
 {
   const size_t length = list.size() * sizeof(T);
-  return CreateArrayObject(pod_info<T>::ptype, ObjectHolder(list.data(), length));
+  return CreatePODArray(list.data(), length);
 }
 
 template <typename T>
@@ -695,13 +706,11 @@ ObjectHolder CreateDoublePODArray(const std::vector<T> &list)
   thread_local std::vector<double> tmp;
   tmp.resize(list.size());
 
-  for (size_t i = 0; i < list.size(); ++i)
-  {
-    tmp[i] = static_cast<double>(list[i]);
-  }
+  std::transform(list.begin(), list.end(), tmp.begin(), [](auto &x){return static_cast<double>(x);});
 
   return CreatePODArray<double>(tmp);
 }
+
 
 template <>
 ObjectHolder CreateDoublePODArray(const std::vector<double> &list)
@@ -709,9 +718,28 @@ ObjectHolder CreateDoublePODArray(const std::vector<double> &list)
   return CreatePODArray<double>(list);
 }
 
+template <>
+ObjectHolder CreateDoublePODArray(const std::vector<std::complex<double>> &list)
+{
+  return CreatePODArray<double>(reinterpret_cast<const double *>(list.data()), sizeof(std::complex<double>) * list.size());
+}
+
 template ObjectHolder CreatePODArray(const std::vector<int> &list);
+//template ObjectHolder CreateDoublePODArray(const std::vector<std::complex<double>> &list);
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
 template ObjectHolder CreateDoublePODArray(const std::vector<float128> &list);
+
+template <>
+ObjectHolder CreateDoublePODArray(const std::vector<std::complex<float128>> &list)
+{
+  thread_local std::vector<std::complex<double>> tmp;
+  tmp.resize(list.size());
+
+  std::transform(list.begin(), list.end(), tmp.begin(), [](auto &x){return std::complex<double>(static_cast<double>(x.real()), static_cast<double>(x.imag()));});
+
+  return CreateDoublePODArray(tmp);
+}
+
 #endif
 

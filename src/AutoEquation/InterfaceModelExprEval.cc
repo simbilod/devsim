@@ -2,24 +2,16 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "InterfaceModelExprEval.hh"
 #include "Interface.hh"
 #include "FPECheck.hh"
 #include "GlobalData.hh"
+#if defined(USE_MATERIALDB)
 #include "MaterialDB.hh"
+#endif
 #include "NodeKeeper.hh"
 #include "Region.hh"
 #include "dsAssert.hh"
@@ -92,7 +84,9 @@ InterfaceModelExprData<DoubleType> InterfaceModelExprEval<DoubleType>::EvaluateV
   InterfaceModelExprData<DoubleType> out;
 
   GlobalData &gd  = GlobalData::GetInstance();
+#if defined(USE_MATERIALDB)
   MaterialDB &mdb = MaterialDB::GetInstance();
+#endif
   NodeKeeper &nk = NodeKeeper::instance();
 
   const std::string &nm = EngineAPI::getName(arg);
@@ -106,12 +100,15 @@ InterfaceModelExprData<DoubleType> InterfaceModelExprEval<DoubleType>::EvaluateV
   if (r)
   {
       const GlobalData::DoubleDBEntry_t &gdbent = gd.GetDoubleDBEntryOnRegion(r, name);
+#if defined(USE_MATERIALDB)
       const MaterialDB::DoubleDBEntry_t &mdbentr = mdb.GetDoubleDBEntry(r->GetMaterialName(), nm);
       const MaterialDB::DoubleDBEntry_t &mdbentg = mdb.GetDoubleDBEntry("global", nm);
+#endif
       if (gdbent.first)
       {
           out = InterfaceModelExprData<DoubleType>(gdbent.second);
       }
+#if defined(USE_MATERIALDB)
       else if (mdbentr.first)
       {
           out = InterfaceModelExprData<DoubleType>(mdbentr.second);
@@ -120,6 +117,7 @@ InterfaceModelExprData<DoubleType> InterfaceModelExprEval<DoubleType>::EvaluateV
       {
           out = InterfaceModelExprData<DoubleType>(mdbentg.second);
       }
+#endif
       else if (nk.IsCircuitNode(nm))
       {
         const DoubleType val = nk.GetNodeValue("dcop", nm);

@@ -87,8 +87,12 @@ matrix:
 install:
   - SET README_BASE_URL=https://github.com/devsim/devsim/blob/%TRAVIS_TAG%
   - cd %APPVEYOR_BUILD_FOLDER%
-  - git submodule init
-  - git submodule update --depth 3
+  - git submodule update --init --depth 1 external/eigen
+  - git submodule update --init --depth 1 external/symdiff
+  - git submodule update --init --depth 1 external/boostorg/config
+  - git submodule update --init --depth 1 external/boostorg/multiprecision
+  - git submodule update --init --depth 1 external/boostorg/math
+  - git submodule update --init --depth 1 external/umfpack_lgpl
   - IF "%PLATFORM%"=="msys" SET CONDA_BIN=c:\Miniconda37-x64\condabin\conda.bat
   - IF "%PLATFORM%"=="x64" SET CONDA_BIN=c:\Miniconda37-x64\condabin\conda.bat
   - IF "%PLATFORM%"=="x86" SET CONDA_BIN=c:\Miniconda37\condabin\conda.bat
@@ -187,7 +191,7 @@ deploy:
   # Deploy to GitHub Releases
   - provider: GitHub
     auth_token:
-      secure: 0m6oHpAf8S81oqWGm9ZAxh8qP3AvSqVXekTWdh4PL8O/BBRDyISCnhSGLPJRQ0ia # your encrypted token from GitHub
+      secure: KPabiYsJCsN7O08NNi7GHM8+spd0eNQi670PYzZDS2rRg0Og5XJMw4goEWpZIALm
     #artifact: dist\*.zip
     draft: true
     prerelease: false

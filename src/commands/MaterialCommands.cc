@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "MaterialCommands.hh"
@@ -21,7 +11,9 @@ limitations under the License.
 #include "GlobalData.hh"
 #include "Region.hh"
 #include "CheckFunctions.hh"
+#if defined(USE_MATERIALDB)
 #include "MaterialDB.hh"
+#endif
 #include "Device.hh"
 #include "Contact.hh"
 
@@ -294,6 +286,7 @@ getParameterCmd(CommandHandler &data)
     return;
 }
 
+#if defined(USE_MATERIALDB)
 void
 openDBCmd(CommandHandler &data)
 {
@@ -517,18 +510,43 @@ getDBEntryCmd(CommandHandler &data)
   }
 }
 
+#else
+void
+MaterialCommandMissing(CommandHandler &data)
+{
+  std::string errorString;
+  std::ostringstream os;
+  const std::string commandName = data.GetCommandName();
+  os << "Material database command \"" << commandName << "\" not supported on this build\n";
+  errorString = os.str();
+  data.SetErrorResult(errorString);
+  return;
+}
+#endif
+
+
+
 Commands MaterialCommands[] = {
     {"set_parameter", getParameterCmd},
     {"get_parameter", getParameterCmd},
     {"get_parameter_list", getParameterCmd},
     {"set_material", getParameterCmd},
     {"get_material", getParameterCmd},
+#if defined(USE_MATERIALDB)
     {"create_db",       openDBCmd},
     {"open_db",         openDBCmd},
     {"close_db",        openDBCmd},
     {"save_db",         openDBCmd},
     {"add_db_entry",    addDBEntryCmd},
     {"get_db_entry",    getDBEntryCmd},
+#else
+    {"create_db",       MaterialCommandMissing},
+    {"open_db",         MaterialCommandMissing},
+    {"close_db",        MaterialCommandMissing},
+    {"save_db",         MaterialCommandMissing},
+    {"add_db_entry",    MaterialCommandMissing},
+    {"get_db_entry",    MaterialCommandMissing},
+#endif
     {"get_dimension",   getParameterCmd},
     {nullptr, nullptr}
 };

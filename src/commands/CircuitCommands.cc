@@ -2,17 +2,7 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "CircuitCommands.hh"
@@ -498,7 +488,7 @@ void circuitGetCircuitSolutionListCmd (CommandHandler &data)
     return;
 }
 
-void circuitGetCircuitNodeValueCmd (CommandHandler &data)
+void circuitGetCircuitNodeValueCmd(CommandHandler &data)
 {
     AddGroundNode();
 
@@ -567,6 +557,27 @@ void circuitGetCircuitNodeValueCmd (CommandHandler &data)
 }
 
 void
+circuitDeleteCircuitCmd(CommandHandler &data)
+{
+  std::string errorString;
+
+  static dsGetArgs::Option option[] =
+  {
+    {nullptr,  nullptr, dsGetArgs::optionType::STRING, dsGetArgs::requiredType::OPTIONAL, nullptr}
+  };
+
+  bool error = data.processOptions(option, errorString);
+
+  if (error)
+  {
+      data.SetErrorResult(errorString);
+  }
+
+  InstanceKeeper::delete_instance();
+  NodeKeeper::delete_instance();
+};
+
+void
 circuitGetCircuitEquationNumberCmd (CommandHandler &data)
 {
   std::string errorString;
@@ -613,19 +624,5 @@ circuitGetCircuitEquationNumberCmd (CommandHandler &data)
     data.SetIntResult(static_cast<int>(number));
   }
 }
-
-Commands CircuitCommands[] = {
-    {"add_circuit_node",   addCircuitNodeCmd},
-    {"circuit_element",    circuitElementCmd},
-    {"circuit_alter",      circuitAlterCmd},
-    {"circuit_node_alias", circuitNodeAliasCmd},
-    {"get_circuit_node_list", circuitGetCircuitNodeListCmd},
-    {"get_circuit_solution_list", circuitGetCircuitSolutionListCmd},
-    {"get_circuit_node_value", circuitGetCircuitNodeValueCmd},
-    {"set_circuit_node_value", circuitGetCircuitNodeValueCmd},
-    {"get_circuit_equation_number", circuitGetCircuitEquationNumberCmd},
-    {nullptr, nullptr}
-};
-
 }
 

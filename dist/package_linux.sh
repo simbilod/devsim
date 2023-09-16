@@ -18,6 +18,7 @@ DIST_VER=${DIST_DIR}
 SYMDIFF_LIBRARY_DIR=../external/symdiff/lib/symdiff
 SYMDIFF_EXAMPLES_DIR=../external/symdiff/examples
 SYMDIFF_DOCUMENTATION_DIR=../external/symdiff/doc
+UMFPACK_LIBRARY_FILE=../external/umfpack_lgpl/build/libumfpack_lgpl.so
 
 # make the bin directory and copy binary in
 # we need the wrapper script for libstdc++
@@ -60,6 +61,10 @@ do
 rsync -aqP --delete ../$i ${DIST_DIR}
 done
 rsync -aqP --delete ../python_packages ${DIST_PYDLL}
+rsync -aqP --delete ../umfpack ${DIST_PYDLL}
+
+# Copy UMFPACK DLL
+cp -vf ${UMFPACK_LIBRARY_FILE} ${DIST_PYDLL}/umfpack
 
 mkdir -p ${DIST_DIR}/examples/symdiff
 # add trailing slash for rsync
@@ -71,7 +76,7 @@ Package released as:
 ${DIST_VER}.tgz
 
 Source available from:
-http://www.github.com/devsim/devsim
+http://github.com/devsim/devsim
 commit ${COMMIT}
 EOF
 tar czvf ${DIST_VER}.tgz ${DIST_DIR}

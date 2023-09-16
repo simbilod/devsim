@@ -1,16 +1,6 @@
 # Copyright 2013 DEVSIM LLC
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 
 # The purpose is to verify our triangle element field calculation.
 # It is based on Laux's weighting scheme
@@ -112,7 +102,7 @@ eecouple = get_element_model_values(device=device, region=region, name="ElementE
 
 (ex, ey) = calculateValues(scalar_efield, eecouple, sx, sy)
 for i in range(len(ex)):
-    print("%g\t%g\t%g\t%g" %( ex[i], ey[i], efieldx[i], efieldy[i]))
+    print("%g\t%g\t%g\t%g" %( ex[i][0], ey[i][0], efieldx[i], efieldy[i]))
 
 #
 # now verify derivatives
@@ -200,7 +190,7 @@ for dnode in range(3): #this is the node we are taking the derivative with respe
 for i in range(3):
     print("index %d" % i)
     for j in range(nelem):
-        print("%g\t%g\t%g\t%g" %( ddata_x[j][i], ddata_y[j][i], cdata_x[j][i], cdata_y[j][i]))
+        print("%g\t%g\t%g\t%g" %( ddata_x[j][i][0], ddata_y[j][i][0], cdata_x[j][i], cdata_y[j][i]))
 
 #print element_node_indexes
 #print potential_diff

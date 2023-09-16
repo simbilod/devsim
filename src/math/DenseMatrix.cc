@@ -2,26 +2,18 @@
 DEVSIM
 Copyright 2013 DEVSIM LLC
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "DenseMatrix.hh"
 
-#if defined(USE_EIGEN)
+#if defined(USE_EIGEN_DOUBLE) || defined(USE_EIGEN_EXTENDED)
 #include "Eigen/Dense"
 #include "Eigen/LU"
 #endif
+#if defined(USE_LAPACK)
 #include "BlasHeaders.hh"
+#endif
 
 #include "dsAssert.hh"
 #include <vector>
@@ -30,6 +22,7 @@ namespace dsMath {
 template <typename T> struct matrix_data;
 
 // blas/lapack implementation
+#ifdef USE_LAPACK
 template <typename T>
 struct matrix_data_lapack {
     matrix_data_lapack(size_t d) : dim_(d), factored_(false), info_(0)
@@ -72,8 +65,9 @@ struct matrix_data_lapack {
     bool                factored_;
     int                 info_;
 };
+#endif
 
-#if defined(USE_EIGEN)
+#if defined(USE_EIGEN_EXTENDED) || defined(USE_EIGEN_DOUBLE)
 template <typename T>
 struct matrix_data_eigen {
     using matrix_type = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
@@ -158,16 +152,24 @@ bool DenseMatrix<DoubleType>::Solve(DoubleType *B)
 }
 
 //// Manual Template Instantiation
+#if defined(USE_EIGEN_DOUBLE)
+template <> struct dsMath::matrix_data <double> : public matrix_data_eigen<double> {using matrix_data_eigen<double>::matrix_data_eigen;};
+#elif defined(USE_LAPACK)
 template <> struct dsMath::matrix_data <double> : public matrix_data_lapack<double> {using matrix_data_lapack<double>::matrix_data_lapack;};
+#else
+#error "no dense matrix function"
+#endif
 template class dsMath::DenseMatrix<double>;
 
 // right now, eigen is for float 128 only
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
-#if defined(USE_EIGEN)
+#if defined(USE_EIGEN_EXTENDED)
 template <> struct dsMath::matrix_data <float128> : public matrix_data_eigen<float128> {using matrix_data_eigen<float128>::matrix_data_eigen;};
-#else
+#elif defined(USE_LAPACK)
 template <> struct dsMath::matrix_data <float128> : public matrix_data_lapack<float128> {using matrix_data_lapack<float128>::matrix_data_lapack;};
+#else
+#error "no dense matrix function"
 #endif
 template class dsMath::DenseMatrix<float128>;
 #endif

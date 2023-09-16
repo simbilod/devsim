@@ -1,8 +1,146 @@
+
 # CHANGES
 
 ## Introduction
 
-Please see the release notes in doc/devsim.pdf or at https://devsim.net for more detailed information about changes.
+Please see the release notes in ``doc/devsim.pdf`` or at [https://devsim.net](https://devsim.net) for more detailed information about changes.
+
+## Version 2.6.2
+
+``delete_circuit``
+
+``get_mesh_list``
+
+## Version 2.6.1
+
+### Bugs
+
+Fix issue [#116](https://github.com/devsim/devsim/issues/116) where the contact current was being calculated incorrectly in transient mode.
+
+## Version 2.6.0
+
+### Symbolic Factorization Reuse
+
+The Intel MKL solver will now use reuse the symbolic factorization, if the simulation matrix sparse matrix pattern has not changed after the second nonlinear solver iteration.  This reduces simulation time, but can result in numerical differences in the simulation result.  Setting the environment variable, ``DEVSIM_NEW_SYMBOLIC``, will do a new symbolic factorization for each iteration.
+
+This behavior may be controlled by using this option in the solve command
+```
+solve(symbolic_iteration_limit = -1)
+```
+where setting the value to ``-1`` will create a new symbolic factorization for all nonlinear iterations.  Setting the value to a number greater than ``0`` will mark all iterations afterwards for reusing the previous symbolic factorization.
+
+### Reset Simulator
+
+The ``reset_devsim`` command will clear all simulator data, so that a program restart is not necessary.
+
+### Build Infrastructure
+
+#### LAPACK is Optional
+
+When LAPACK functions are not available, it is now possible to use Eigen instead.  BLAS is still required.  It is up to the direct solver being used to determine necessary LAPACK functions.
+
+#### Self Contained Build
+
+The build infrastructure is being updated to support a small application build on different systems.  For these builds, some commands are removed and SuperLU is the only available solver.
+
+#### SuperLU Solver
+
+For self contained builds, some commands are removed and SuperLU is the only available solver.
+
+### Citing DEVSIM
+
+[CITATION.md](CITATION.md) has been updated with recent articles written about the simulator.
+
+## Version 2.5.0
+
+UMFPACK 5.1 is the new default when the Intel MKL is not available, making this the default for the macOS arm64 platform.
+
+SuperLU is removed and no longer available as a solver.
+
+Regression scripts were passing when there were numerical differences in the data diff comparison.  This is now corrected and the regression results have been updated on all platforms.
+
+For those building the software, the ``EXPLICIT_MATH_LOAD`` CMAKE option has been removed, so that the software is not directly linked to any math library.
+
+The license text for the Apache 2.0 license has been replaced with the SPDX format of the license string.  This ensures that the text can be used in a consistent manner across all source files.
+
+## Version 2.4.0
+
+### Determine Loaded Math Libraries
+
+To determine the loaded math libraries, use
+```
+devsim.get_parameter(name='info')['math_libraries']
+```
+
+### UMFPACK 5.1 Solver
+
+The ``UMFPACK`` 5.1 solver is now available as a shared library distributed with the software.  It is licensed under the terms of the LGPL 2.1 and our version is hosted here:
+
+[https://github.com/devsim/umfpack_lgpl](https://github.com/devsim/umfpack_lgpl)
+
+Please note that this version uses a scheme to provide the needed math library functions when the library is loaded.
+
+In order to use this library, a shim script is provided to load UMFPACK and set it as the solver.  Please see this example:
+```
+python -mdevsim.umfpack.umfshim ssac_cap.py
+```
+
+### Direct Solver Callback
+
+It is now possible to setup call a custom direct solver.  The direct solver is called from Python and the callback is implemented by setting these parameters:
+```
+devsim.set_parameter(name="direct_solver", value="custom")
+devsim.set_parameter(name="solver_callback", value=local_solver_callback)
+```
+
+Where the first parameter enables the use of the second parameter to set a callback function.  Please see the ``testing/umfpack_shim.py`` for a sample implementation using UMFPACK 5.1.
+
+### Apple M1
+
+On this platform, the software does not check for floating point exceptions (FPEs) during usage of the direct solver.  During testing, it was discovered that FPEs were occuring during factorization for both the ``SuperLU`` and the ``UMFPACK``.  Removing this check allows more of the tests to run through to completion.
+
+### Bugs
+
+Fix issue [#104](https://github.com/devsim/devsim/issues/104) where the 2D MOSFET example was not fully connected across region interfaces.
+```
+testing/mos_2d.py
+testing/mos_2d_restart.py
+testing/mos_2d_restart2.py
+```
+This was resulting in an FPE during testing on macOS M1.
+
+## Version 2.3.8
+
+### Bugs
+
+[@ryan3141](https://github.com/ryan3141) fixed an issue where math functions added with ``devsim.register_function`` were not available in extended precision model evaluation.  The ``testing/testfunc_extended.py`` test is added to validate the fix.
+
+Update NOTICE with the license files from the various dependencies.
+
+## Version 2.3.7
+
+### Apple M1 Support
+
+Intel MKL Pardiso not available, so using system BLAS/LAPACK or openblas by default.  In addition, SuperLU, is used instead of the MKL Pardiso.  This results in some test failures, based on the use of a different solver, and not the OS architecture.
+
+Extended precision is enabled.
+
+Enabled by running pip install.
+
+The regression results are in this newly created repo:
+
+* [devsim_tests_macos_arm64](https://github.com/devsim/devsim_tests_macos_arm64)
+
+
+### Python Notebook Example With 3D Visualization
+
+
+A plotting example using ``pyvista`` is presented in ``examples/plotting/visualization.ipynb``.  This example was provided by [@simbilod](https://github.com/simbilod).
+
+### Bugs
+
+When instantiating a mesh from Gmsh, contact and interface related errors to dimensionality have an improved error message.
+
 
 ## Version 2.3.6
 

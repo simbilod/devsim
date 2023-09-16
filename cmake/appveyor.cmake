@@ -8,8 +8,8 @@
 SET (FLEX  "C:/msys64/usr/bin/flex.exe")
 SET (BISON "C:/msys64/usr/bin/bison.exe")
 SET (EXTERNAL_LIB ${PROJECT_SOURCE_DIR}/external)
-SET (BOOST_INCLUDE ${EXTERNAL_LIB}/boostorg/math/include ${EXTERNAL_LIB}/boostorg/multiprecision/include)
-ADD_DEFINITIONS(-DBOOST_MP_STANDALONE -DBOOST_MP_MATH_AVAILABLE)
+SET (BOOST_INCLUDE ${EXTERNAL_LIB}/boostorg/config/include ${EXTERNAL_LIB}/boostorg/math/include ${EXTERNAL_LIB}/boostorg/multiprecision/include)
+ADD_DEFINITIONS(-DBOOST_MP_STANDALONE -DBOOST_MATH_STANDALONE)
 
 ADD_DEFINITIONS(-DSTATIC_BUILD -D_USE_MATH_DEFINES)
 #Math stuff
@@ -35,9 +35,6 @@ SET (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /SAFESEH:NO")
 # windows build
 
 SET (EIGEN_INCLUDE ${CMAKE_SOURCE_DIR}/external/eigen)
-SET (SUPERLULOCATE   ${CMAKE_SOURCE_DIR}/external/superlu)
-SET (SUPERLU_ARCHIVE ${SUPERLULOCATE}/${BUILDDIR}/SRC/Release/superlu.lib)
-SET (SUPERLU_INCLUDE ${SUPERLULOCATE}/SRC)
 
 SET (BLAS_ARCHIVE     ${CONDA_PREFIX}/Library/lib/mkl_rt.lib)
 SET (MKL_PARDISO_INCLUDE ${CONDA_PREFIX}/Library/include)
@@ -49,5 +46,5 @@ SET (ZLIB_INCLUDE ${CONDA_PREFIX}/Library/include)
 SET (ZLIB_ARCHIVE ${CONDA_PREFIX}/Library/lib/zlib.lib)
 
 SET (SYMDIFF_INCLUDE ${CMAKE_SOURCE_DIR}/external/symdiff/include)
-SET (SYMDIFF_ARCHIVE ${CMAKE_SOURCE_DIR}/external/symdiff/${BUILDDIR}/src/engine/Release/symdiff_static.lib)
+SET (SYMDIFF_ARCHIVE ${CMAKE_SOURCE_DIR}/external/symdiff/${BUILDDIR}/src/engine/Release/symdiff_dynamic.lib)
 

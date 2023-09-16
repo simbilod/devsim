@@ -1,19 +1,10 @@
 # Copyright 2013 DEVSIM LLC
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 
 from devsim.python_packages.simple_physics import *
 from devsim.python_packages.ramp import *
+from devsim import *
 
 import gmsh_mos2d_create
 device = "mos2d"
@@ -45,15 +36,6 @@ for i in contacts:
 for i in interfaces:
     CreateSiliconOxideInterface(device, i)
 
-#for d in get_device_list():
-#  for gn in get_parameter_list():
-#    print("{0} {1}").format(gn, get_parameter(device=d, name=gn))
-#  for gn in get_parameter_list(device=d):
-#    print("{0} {1} {2}").format(d, gn, get_parameter(device=d, name=gn))
-#  for r in get_region_list(device=d):
-#    for gn in get_parameter_list(device=d, region=r):
-#      print("{0} {1} {2} {3}").format(d, r, gn, get_parameter(device=d, region=r, name=gn))
-#write_devices(file="foo.msh", type="devsim")
 solve(type="dc", absolute_error=1.0e-13, relative_error=1e-12, maximum_iterations=30)
 solve(type="dc", absolute_error=1.0e-13, relative_error=1e-12, maximum_iterations=30)
 #
@@ -76,11 +58,6 @@ solve(type="dc", absolute_error=1.0e30, relative_error=1e-5, maximum_iterations=
 
 for r in silicon_regions:
     node_model(device=device, region=r, name="logElectrons", equation="log(Electrons)/log(10)")
-
-##write_devices -file gmsh_mos2d_dd.flps -type floops
-##write_devices -file gmsh_mos2d_dd -type vtk
-##write_devices -file gmsh_mos2d_dd.msh -type devsim_data
-#
 
 
 for r in silicon_regions:

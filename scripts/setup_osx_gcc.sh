@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+set -u
 DEVSIM_CONFIG="osx_gcc"
 for TYPE in debug release; do
   for ARCH in x86_64; do
@@ -14,7 +17,6 @@ for TYPE in debug release; do
       -DMKL_PARDISO=ON \
       -DPYTHON3=ON \
       -DPYTHON3_INCLUDE=${PYTHON3_INCLUDE} \
-      -DCONDA_PREFIX=${CONDA_PREFIX} \
       ..)
   done
 done
