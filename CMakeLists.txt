@@ -86,3 +86,8 @@ FOREACH (SUB ${SUBDIRS})
     ADD_SUBDIRECTORY(${SUB})
 ENDFOREACH (SUB ${SUBDIRS})
 
+
+add_custom_target(
+    format
+    COMMAND find ${CMAKE_SOURCE_DIR} -iname *.h -o -iname *.cpp -o -iname *.cc -o -iname *.hh | xargs clang-format -i
+)
