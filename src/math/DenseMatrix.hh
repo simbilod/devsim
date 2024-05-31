@@ -11,35 +11,30 @@ SPDX-License-Identifier: Apache-2.0
 namespace dsMath {
 template <typename T> class DenseMatrix;
 
-template <typename T>
-using RealDenseMatrix = DenseMatrix<T>;
+template <typename T> using RealDenseMatrix = DenseMatrix<T>;
 
-template <typename T>
-struct matrix_data;
+template <typename T> struct matrix_data;
 
 template <typename T> class DenseMatrix {
-  public:
+public:
+  //// Assume square for now
+  explicit DenseMatrix(size_t);
+  ~DenseMatrix();
 
-    //// Assume square for now
-    explicit DenseMatrix(size_t);
-    ~DenseMatrix();
+  T &operator()(size_t, size_t);
+  T operator()(size_t, size_t) const;
 
-    T &operator()(size_t, size_t);
-    T operator()(size_t, size_t) const;
+  bool LUFactor();
 
-    bool LUFactor();
+  //// Done inplace
+  bool Solve(T *);
 
-    //// Done inplace
-    bool Solve(T *);
+private:
+  DenseMatrix &operator=(const DenseMatrix &);
+  DenseMatrix(const DenseMatrix &);
+  DenseMatrix();
 
-  private:
-    DenseMatrix &operator=(const DenseMatrix &);
-    DenseMatrix(const DenseMatrix &);
-    DenseMatrix();
-
-    std::unique_ptr<matrix_data<T>> matrixdata_;
-
+  std::unique_ptr<matrix_data<T>> matrixdata_;
 };
-}
+} // namespace dsMath
 #endif
-

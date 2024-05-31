@@ -6,25 +6,25 @@ SPDX-License-Identifier: Apache-2.0
 ***/
 
 #include "Newton.hh"
-#include "Permutation.hh"
-#include "MatrixEntries.hh"
+#include "CompressedMatrix.hh"
+#include "Device.hh"
+#include "EquationHolder.hh"
 #include "GlobalData.hh"
 #include "InstanceKeeper.hh"
-#include "NodeKeeper.hh"
-#include "CompressedMatrix.hh"
-#include "Preconditioner.hh"
-#include "SolverUtil.hh"
 #include "LinearSolver.hh"
-#include "Device.hh"
-#include "Region.hh"
-#include "EquationHolder.hh"
+#include "MatrixEntries.hh"
+#include "NodeKeeper.hh"
 #include "OutputStream.hh"
+#include "Permutation.hh"
+#include "Preconditioner.hh"
+#include "Region.hh"
+#include "SolverUtil.hh"
 #include "dsAssert.hh"
 
 #include "TimeData.hh"
 
-#include "ObjectHolder.hh"
 #include "Interpreter.hh"
+#include "ObjectHolder.hh"
 #include "dsTimer.hh"
 
 #ifdef DEVSIM_EXTENDED_PRECISION
@@ -34,31 +34,28 @@ SPDX-License-Identifier: Apache-2.0
 
 #include "ControlGIL.hh"
 
-#include <sstream>
-#include <iomanip>
 #include <cmath>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 using std::abs;
 
 namespace dsMath {
 
-template <typename DoubleType>
-Newton<DoubleType>::Newton() {}
+template <typename DoubleType> Newton<DoubleType>::Newton() {}
+
+template <typename DoubleType> Newton<DoubleType>::~Newton(){};
 
 template <typename DoubleType>
-Newton<DoubleType>::~Newton() {};
-
-template <typename DoubleType>
-size_t Newton<DoubleType>::NumberEquationsAndSetDimension()
-{
+size_t Newton<DoubleType>::NumberEquationsAndSetDimension() {
   GlobalData &gdata = GlobalData::GetInstance();
 
   bool verbose = false;
   {
     auto dbent = gdata.GetDBEntryOnGlobal("debug_level");
-    verbose = OutputStream::GetVerbosity(dbent.second.GetString()) != OutputStream::Verbosity_t::V0;
+    verbose = OutputStream::GetVerbosity(dbent.second.GetString()) !=
+              OutputStream::Verbosity_t::V0;
   }
-
 
   size_t eqnnum = 0;
 
@@ -66,40 +63,33 @@ size_t Newton<DoubleType>::NumberEquationsAndSetDimension()
 
   const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
   {
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::ostringstream os;
 
       const std::string &name = (dit->first);
 
-      Device &dev =     *(dit->second);
+      Device &dev = *(dit->second);
       dev.SetBaseEquationNumber(eqnnum);
       const size_t maxnum = dev.CalcMaxEquationNumber(verbose);
 
-      if (maxnum != size_t(-1))
-      {
-        if (verbose)
-        {
-          os << "Device \"" << name << "\" has equations " << eqnnum << ":" << maxnum << "\n";
+      if (maxnum != size_t(-1)) {
+        if (verbose) {
+          os << "Device \"" << name << "\" has equations " << eqnnum << ":"
+             << maxnum << "\n";
         }
         eqnnum = maxnum + 1;
-      }
-      else
-      {
-        if (verbose)
-        {
+      } else {
+        if (verbose) {
           os << "Device \"" << name << "\" has no equations.\n";
         }
       }
-      if (verbose)
-      {
+      if (verbose) {
         OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
       }
 
-      if (dev.GetDimension() > dimension)
-      {
+      if (dev.GetDimension() > dimension) {
         dimension = dev.GetDimension();
       }
     }
@@ -107,13 +97,11 @@ size_t Newton<DoubleType>::NumberEquationsAndSetDimension()
 
   {
     NodeKeeper &nk = NodeKeeper::instance();
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       nk.SetNodeNumbers(eqnnum, verbose);
       size_t maxnum = nk.GetMaxEquationNumber();
 #if 1
-      if (verbose)
-      {
+      if (verbose) {
         std::ostringstream os;
         os << "Circuit has equations " << eqnnum << ":" << maxnum << "\n";
         OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
@@ -127,127 +115,113 @@ size_t Newton<DoubleType>::NumberEquationsAndSetDimension()
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::AssembleContactsAndInterfaces(RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs, permvec_t &permvec, Device &dev, dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t)
-{
-  PermutationMap         p;
+void Newton<DoubleType>::AssembleContactsAndInterfaces(
+    RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs,
+    permvec_t &permvec, Device &dev, dsMathEnum::WhatToLoad w,
+    dsMathEnum::TimeMode t) {
+  PermutationMap p;
 
   dev.ContactAssemble(mat, rhs, p, w, t);
   dev.InterfaceAssemble(mat, rhs, p, w, t);
 
   PermutationMap::iterator pit = p.begin();
   const PermutationMap::iterator pend = p.end();
-  for (; pit != pend; ++pit)
-  {
+  for (; pit != pend; ++pit) {
     permvec.at(pit->first) = (pit->second);
   }
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::AssembleBulk(RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs, Device &dev, dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t)
-{
+void Newton<DoubleType>::AssembleBulk(RealRowColValueVec<DoubleType> &mat,
+                                      RHSEntryVec<DoubleType> &rhs, Device &dev,
+                                      dsMathEnum::WhatToLoad w,
+                                      dsMathEnum::TimeMode t) {
   dev.RegionAssemble(mat, rhs, dsMathEnum::WhatToLoad::MATRIXANDRHS, t);
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::LoadMatrixAndRHSOnCircuit(RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs, dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t)
-{
+void Newton<DoubleType>::LoadMatrixAndRHSOnCircuit(
+    RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs,
+    dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t) {
   InstanceKeeper &ik = InstanceKeeper::instance();
-  NodeKeeper     &nk = NodeKeeper::instance();
+  NodeKeeper &nk = NodeKeeper::instance();
 
   RHSEntryVec<double> drhs;
   RealRowColValueVec<double> dmat;
 
-  if (t == dsMathEnum::TimeMode::DC)
-  {
+  if (t == dsMathEnum::TimeMode::DC) {
     std::vector<double> *sol = nk.GetSolution("dcop");
     dsAssert(sol != 0, "UNEXPECTED");
-    if (w == dsMathEnum::WhatToLoad::MATRIXANDRHS)
-    {
+    if (w == dsMathEnum::WhatToLoad::MATRIXANDRHS) {
       ik.AssembleDCMatrix(dmat, *sol, drhs);
-    }
-    else if (w == dsMathEnum::WhatToLoad::MATRIXONLY)
-    {
+    } else if (w == dsMathEnum::WhatToLoad::MATRIXONLY) {
       RHSEntryVec<double> r;
       ik.AssembleDCMatrix(dmat, *sol, r);
-    }
-    else if (w == dsMathEnum::WhatToLoad::RHS)
-    {
+    } else if (w == dsMathEnum::WhatToLoad::RHS) {
       //// Make more efficient later
       RealRowColValueVec<double> m;
       ik.AssembleDCMatrix(m, *sol, drhs);
-    }
-    else
-    {
+    } else {
       dsAssert(0, "UNEXPECTED");
     }
-  }
-  else if (t == dsMathEnum::TimeMode::TIME)
-  {
+  } else if (t == dsMathEnum::TimeMode::TIME) {
     std::vector<double> *sol = nk.GetSolution("dcop");
     dsAssert(sol != 0, "UNEXPECTED");
-    if (w == dsMathEnum::WhatToLoad::MATRIXANDRHS)
-    {
+    if (w == dsMathEnum::WhatToLoad::MATRIXANDRHS) {
       ik.AssembleTRMatrix(&dmat, *sol, drhs, 1.0);
-    }
-    else if (w == dsMathEnum::WhatToLoad::MATRIXONLY)
-    {
+    } else if (w == dsMathEnum::WhatToLoad::MATRIXONLY) {
       RHSEntryVec<double> r;
       ik.AssembleTRMatrix(&dmat, *sol, r, 1.0);
-    }
-    else if (w == dsMathEnum::WhatToLoad::RHS)
-    {
+    } else if (w == dsMathEnum::WhatToLoad::RHS) {
       RealRowColValueVec<double> *m = nullptr;
       ik.AssembleTRMatrix(m, *sol, drhs, 1.0);
-    }
-    else
-    {
+    } else {
       dsAssert(0, "UNEXPECTED");
     }
-  }
-  else
-  {
+  } else {
     dsAssert(0, "UNEXPECTED");
   }
 
-  for (size_t i = 0; i < dmat.size(); ++i)
-  {
+  for (size_t i = 0; i < dmat.size(); ++i) {
     auto &entry = dmat[i];
-    mat.push_back(RowColVal<DoubleType>(entry.row, entry.col, static_cast<DoubleType>(entry.val)));
+    mat.push_back(RowColVal<DoubleType>(entry.row, entry.col,
+                                        static_cast<DoubleType>(entry.val)));
   }
 
-  for (size_t i = 0; i < drhs.size(); ++i)
-  {
+  for (size_t i = 0; i < drhs.size(); ++i) {
     auto &entry = drhs[i];
-    rhs.push_back(std::make_pair(entry.first, static_cast<DoubleType>(entry.second)));
+    rhs.push_back(
+        std::make_pair(entry.first, static_cast<DoubleType>(entry.second)));
   }
 }
 
 template <typename DoubleType>
 template <typename T>
-void Newton<DoubleType>::LoadIntoMatrix(const RealRowColValueVec<DoubleType> &rcv, Matrix<DoubleType> &mat, T scl, size_t offset)
-{
-  for (typename RealRowColValueVec<DoubleType>::const_iterator it = rcv.begin(); it != rcv.end(); ++it)
-  {
+void Newton<DoubleType>::LoadIntoMatrix(
+    const RealRowColValueVec<DoubleType> &rcv, Matrix<DoubleType> &mat, T scl,
+    size_t offset) {
+  for (typename RealRowColValueVec<DoubleType>::const_iterator it = rcv.begin();
+       it != rcv.end(); ++it) {
     const size_t row = it->row + offset;
     const size_t col = it->col + offset;
     const T val = scl * it->val;
-//    std::cerr << "RCV: " << row << "\t" << col << "\t" << val << "\n";
+    //    std::cerr << "RCV: " << row << "\t" << col << "\t" << val << "\n";
     mat.AddEntry(row, col, val);
   }
 }
 
 template <typename DoubleType>
 template <typename T>
-void Newton<DoubleType>::LoadIntoMatrixPermutated(const RealRowColValueVec<DoubleType> &rcv, Matrix<DoubleType> &mat, const permvec_t &permvec, T scl, size_t offset)
-{
-  for (typename RealRowColValueVec<DoubleType>::const_iterator it = rcv.begin(); it != rcv.end(); ++it)
-  {
+void Newton<DoubleType>::LoadIntoMatrixPermutated(
+    const RealRowColValueVec<DoubleType> &rcv, Matrix<DoubleType> &mat,
+    const permvec_t &permvec, T scl, size_t offset) {
+  for (typename RealRowColValueVec<DoubleType>::const_iterator it = rcv.begin();
+       it != rcv.end(); ++it) {
     auto original_row = it->row;
     const auto &Entry = permvec[original_row];
     auto row = Entry.GetRow();
 
-    if (row == size_t(-1))
-    {
+    if (row == size_t(-1)) {
       continue;
     }
 
@@ -256,8 +230,7 @@ void Newton<DoubleType>::LoadIntoMatrixPermutated(const RealRowColValueVec<Doubl
     row += offset;
     mat.AddEntry(row, col, val);
 
-    if (Entry.KeepCopy())
-    {
+    if (Entry.KeepCopy()) {
       original_row += offset;
       mat.AddEntry(original_row, col, val);
     }
@@ -266,28 +239,30 @@ void Newton<DoubleType>::LoadIntoMatrixPermutated(const RealRowColValueVec<Doubl
 
 template <typename DoubleType>
 template <typename T>
-void Newton<DoubleType>::LoadIntoRHS(const RHSEntryVec<DoubleType> &r, std::vector<T> &rhs, T scl, size_t offset)
-{
-  for (typename RHSEntryVec<DoubleType>::const_iterator it = r.begin(); it != r.end(); ++it)
-  {
+void Newton<DoubleType>::LoadIntoRHS(const RHSEntryVec<DoubleType> &r,
+                                     std::vector<T> &rhs, T scl,
+                                     size_t offset) {
+  for (typename RHSEntryVec<DoubleType>::const_iterator it = r.begin();
+       it != r.end(); ++it) {
     const size_t row = it->first + offset;
     const T val = scl * rhssign * it->second;
-//    std::cerr << "RHS " << row << "\t" << val << "\n";
+    //    std::cerr << "RHS " << row << "\t" << val << "\n";
     rhs[row] += val;
   }
 }
 
 template <typename DoubleType>
 template <typename T>
-void Newton<DoubleType>::LoadIntoRHSPermutated(const RHSEntryVec<DoubleType> &r, std::vector<T> &rhs, const permvec_t &permvec, T scl, size_t offset)
-{
-  for (typename RHSEntryVec<DoubleType>::const_iterator it = r.begin(); it != r.end(); ++it)
-  {
+void Newton<DoubleType>::LoadIntoRHSPermutated(const RHSEntryVec<DoubleType> &r,
+                                               std::vector<T> &rhs,
+                                               const permvec_t &permvec, T scl,
+                                               size_t offset) {
+  for (typename RHSEntryVec<DoubleType>::const_iterator it = r.begin();
+       it != r.end(); ++it) {
     auto original_row = it->first;
     const auto &Entry = permvec[original_row];
     auto row = permvec[it->first].GetRow();
-    if (row == size_t(-1))
-    {
+    if (row == size_t(-1)) {
       continue;
     }
 
@@ -295,8 +270,7 @@ void Newton<DoubleType>::LoadIntoRHSPermutated(const RHSEntryVec<DoubleType> &r,
     const T val = scl * rhssign * it->second;
     rhs[row] += val;
 
-    if (Entry.KeepCopy())
-    {
+    if (Entry.KeepCopy()) {
       original_row += offset;
       rhs[original_row] += val;
     }
@@ -305,32 +279,33 @@ void Newton<DoubleType>::LoadIntoRHSPermutated(const RHSEntryVec<DoubleType> &r,
 
 template <typename DoubleType>
 template <typename T>
-void Newton<DoubleType>::LoadMatrixAndRHS(Matrix<DoubleType> &matrix, std::vector<T> &rhs, permvec_t &permvec, dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t, T scl)
-{
+void Newton<DoubleType>::LoadMatrixAndRHS(Matrix<DoubleType> &matrix,
+                                          std::vector<T> &rhs,
+                                          permvec_t &permvec,
+                                          dsMathEnum::WhatToLoad w,
+                                          dsMathEnum::TimeMode t, T scl) {
   dsTimer timer("LoadMatrixAndRHS");
 
-  RHSEntryVec<DoubleType>    v;
+  RHSEntryVec<DoubleType> v;
   RealRowColValueVec<DoubleType> m;
 
   // Permutated variant
-  RHSEntryVec<DoubleType>    pv;
+  RHSEntryVec<DoubleType> pv;
   RealRowColValueVec<DoubleType> pm;
 
   GlobalData &gdata = GlobalData::GetInstance();
   const GlobalData::DeviceList_t dlist = gdata.GetDeviceList();
 
-  GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+  GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
   GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-  for ( ; dit != dend; ++dit)
-  {
+  for (; dit != dend; ++dit) {
     Device &dev = *(dit->second);
     m.clear();
     v.clear();
 
     AssembleContactsAndInterfaces(m, v, permvec, dev, w, t);
 
-    if (w != dsMathEnum::WhatToLoad::PERMUTATIONSONLY)
-    {
+    if (w != dsMathEnum::WhatToLoad::PERMUTATIONSONLY) {
       LoadIntoMatrix(m, matrix, scl);
       LoadIntoRHS(v, rhs, scl);
 
@@ -343,11 +318,9 @@ void Newton<DoubleType>::LoadMatrixAndRHS(Matrix<DoubleType> &matrix, std::vecto
     }
   }
 
-  if (w != dsMathEnum::WhatToLoad::PERMUTATIONSONLY)
-  {
+  if (w != dsMathEnum::WhatToLoad::PERMUTATIONSONLY) {
     NodeKeeper &nk = NodeKeeper::instance();
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       size_t offset = nk.GetMinEquationNumber();
       m.clear();
       v.clear();
@@ -370,71 +343,74 @@ void Newton<DoubleType>::LoadMatrixAndRHS(Matrix<DoubleType> &matrix, std::vecto
 
 //// This function must be skipped for noise
 template <typename DoubleType>
-void Newton<DoubleType>::LoadCircuitRHSAC(ComplexDoubleVec_t<DoubleType> &rhs)
-{
+void Newton<DoubleType>::LoadCircuitRHSAC(ComplexDoubleVec_t<DoubleType> &rhs) {
 
-  typedef std::vector<std::pair<size_t, ComplexDouble_t<double> > > ComplexRHSEntryVec_t;
+  typedef std::vector<std::pair<size_t, ComplexDouble_t<double>>>
+      ComplexRHSEntryVec_t;
 
   ComplexRHSEntryVec_t cv;
 
   std::ostringstream os;
   NodeKeeper &nk = NodeKeeper::instance();
-  if (nk.HaveNodes())
-  {
+  if (nk.HaveNodes()) {
     InstanceKeeper &ik = InstanceKeeper::instance();
     ik.assembleACRHS(cv);
 
-    if (cv.empty())
-    {
+    if (cv.empty()) {
       os << "WARN: no rhs source for small-signal ac\n";
     }
 
     size_t offset = nk.GetMinEquationNumber();
 
-    for (typename ComplexRHSEntryVec_t::iterator it = cv.begin(); it != cv.end(); ++it)
-    {
-      rhs[it->first + offset] = ComplexDouble_t<DoubleType>(static_cast<DoubleType>(it->second.real()), static_cast<DoubleType>(it->second.imag()));
+    for (typename ComplexRHSEntryVec_t::iterator it = cv.begin();
+         it != cv.end(); ++it) {
+      rhs[it->first + offset] = ComplexDouble_t<DoubleType>(
+          static_cast<DoubleType>(it->second.real()),
+          static_cast<DoubleType>(it->second.imag()));
     }
   }
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::LoadMatrixAndRHSAC(Matrix<DoubleType> &matrix, ComplexDoubleVec_t<DoubleType> &rhs, permvec_t &permvec, DoubleType frequency)
-{
+void Newton<DoubleType>::LoadMatrixAndRHSAC(Matrix<DoubleType> &matrix,
+                                            ComplexDoubleVec_t<DoubleType> &rhs,
+                                            permvec_t &permvec,
+                                            DoubleType frequency) {
 #if 1
   static const DoubleType two_pi = boost::math::constants::two_pi<DoubleType>();
 #else
 #ifdef DEVSIM_EXTENDED_PRECISION
   static const DoubleType two_pi = boost::math::constants::two_pi<DoubleType>();
 #else
-  static const DoubleType two_pi = 2.0*M_PI;
+  static const DoubleType two_pi = 2.0 * M_PI;
 #endif
 #endif
-  const ComplexDouble_t<DoubleType> jOmega  = two_pi * ComplexDouble_t<DoubleType>(0,1.0) * frequency;
+  const ComplexDouble_t<DoubleType> jOmega =
+      two_pi * ComplexDouble_t<DoubleType>(0, 1.0) * frequency;
 
-  DoubleVec_t<DoubleType>                   r(rhs.size());
+  DoubleVec_t<DoubleType> r(rhs.size());
   ComplexDoubleVec_t<DoubleType> c(rhs.size());
-  LoadMatrixAndRHS(matrix, r, permvec, dsMathEnum::WhatToLoad::PERMUTATIONSONLY, dsMathEnum::TimeMode::DC,   static_cast<DoubleType>(1.0));
-  LoadMatrixAndRHS(matrix, r, permvec, dsMathEnum::WhatToLoad::MATRIXONLY, dsMathEnum::TimeMode::DC,   static_cast<DoubleType>(1.0));
-  LoadMatrixAndRHS(matrix, c, permvec, dsMathEnum::WhatToLoad::MATRIXONLY, dsMathEnum::TimeMode::TIME, jOmega);
+  LoadMatrixAndRHS(matrix, r, permvec, dsMathEnum::WhatToLoad::PERMUTATIONSONLY,
+                   dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+  LoadMatrixAndRHS(matrix, r, permvec, dsMathEnum::WhatToLoad::MATRIXONLY,
+                   dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+  LoadMatrixAndRHS(matrix, c, permvec, dsMathEnum::WhatToLoad::MATRIXONLY,
+                   dsMathEnum::TimeMode::TIME, jOmega);
 }
 
-template <typename DoubleType>
-void Newton<DoubleType>::RestoreSolutions()
-{
+template <typename DoubleType> void Newton<DoubleType>::RestoreSolutions() {
   GlobalData &gdata = GlobalData::GetInstance();
 
   const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
   {
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::ostringstream os;
 
       std::string name = (dit->first);
-      Device &dev =     *(dit->second);
+      Device &dev = *(dit->second);
       //// Transient may have other backup suffixes
       dev.RestoreSolutions("_prev");
     }
@@ -442,28 +418,24 @@ void Newton<DoubleType>::RestoreSolutions()
 
   {
     NodeKeeper &nk = NodeKeeper::instance();
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       nk.CopySolution("dcop_prev", "dcop");
     }
   }
 }
 
-template <typename DoubleType>
-void Newton<DoubleType>::BackupSolutions()
-{
+template <typename DoubleType> void Newton<DoubleType>::BackupSolutions() {
   GlobalData &gdata = GlobalData::GetInstance();
 
   const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
   {
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::ostringstream os;
 
       std::string name = (dit->first);
-      Device &dev =     *(dit->second);
+      Device &dev = *(dit->second);
       //// Transient may have other backup suffixes
       dev.BackupSolutions("_prev");
     }
@@ -471,96 +443,96 @@ void Newton<DoubleType>::BackupSolutions()
 
   {
     NodeKeeper &nk = NodeKeeper::instance();
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       nk.InitializeSolution("dcop_prev");
       nk.CopySolution("dcop", "dcop_prev");
     }
   }
 }
 
-
 namespace {
-void CallUpdateSolution(NodeKeeper &nk, const std::string &name, std::vector<double> &result)
-{
+void CallUpdateSolution(NodeKeeper &nk, const std::string &name,
+                        std::vector<double> &result) {
   nk.UpdateSolution(name, result);
 }
 
 #ifdef DEVSIM_EXTENDED_PRECISION
-void CallUpdateSolution(NodeKeeper &nk, const std::string &name, std::vector<float128> &result)
-{
+void CallUpdateSolution(NodeKeeper &nk, const std::string &name,
+                        std::vector<float128> &result) {
   std::vector<double> tmp(result.size());
-  for (size_t i = 0; i < result.size(); ++i)
-  {
+  for (size_t i = 0; i < result.size(); ++i) {
     tmp[i] = static_cast<double>(result[i]);
   }
   nk.UpdateSolution(name, tmp);
 }
 #endif
 
-void CallACUpdateSolution(NodeKeeper &nk, const std::string &rname, const std::string &iname, std::vector<ComplexDouble_t<double>> &result)
-{
+void CallACUpdateSolution(NodeKeeper &nk, const std::string &rname,
+                          const std::string &iname,
+                          std::vector<ComplexDouble_t<double>> &result) {
   nk.ACUpdateSolution(rname, iname, result);
 }
 
 #ifdef DEVSIM_EXTENDED_PRECISION
-void CallACUpdateSolution(NodeKeeper &nk, const std::string &rname, const std::string &iname, std::vector<ComplexDouble_t<float128>> &result)
-{
+void CallACUpdateSolution(NodeKeeper &nk, const std::string &rname,
+                          const std::string &iname,
+                          std::vector<ComplexDouble_t<float128>> &result) {
   std::vector<ComplexDouble_t<double>> tmp(result.size());
-  for (size_t i = 0; i < result.size(); ++i)
-  {
-    tmp[i] = ComplexDouble_t<double>(static_cast<double>(result[i].real()), static_cast<double>(result[i].imag()));
+  for (size_t i = 0; i < result.size(); ++i) {
+    tmp[i] = ComplexDouble_t<double>(static_cast<double>(result[i].real()),
+                                     static_cast<double>(result[i].imag()));
   }
   nk.ACUpdateSolution(rname, iname, tmp);
 }
 #endif
 
-}
+} // namespace
 
 template <typename DoubleType>
-void Newton<DoubleType>::GetMatrixAndRHSForExternalUse(CompressionType ct, ObjectHolderMap_t &ohm)
-{
+void Newton<DoubleType>::GetMatrixAndRHSForExternalUse(CompressionType ct,
+                                                       ObjectHolderMap_t &ohm) {
   NodeKeeper &nk = NodeKeeper::instance();
 
   const size_t numeqns = NumberEquationsAndSetDimension();
 
-  if (nk.HaveNodes())
-  {
+  if (nk.HaveNodes()) {
     nk.InitializeSolution("dcop");
   }
 
   const auto matrix_type = MatrixType::REAL;
 
-  auto matrix = std::unique_ptr<CompressedMatrix<DoubleType>>(new CompressedMatrix<DoubleType>(numeqns, matrix_type, ct));
+  auto matrix = std::unique_ptr<CompressedMatrix<DoubleType>>(
+      new CompressedMatrix<DoubleType>(numeqns, matrix_type, ct));
   DoubleVec_t<DoubleType> rhs(numeqns);
 
   permvec_t permvec(numeqns);
-  for (size_t i = 0; i < permvec.size(); ++i)
-  {
+  for (size_t i = 0; i < permvec.size(); ++i) {
     permvec[i] = PermutationEntry(i, false);
   }
 
   // Add permutation matrix
-  LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::PERMUTATIONSONLY, dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+  LoadMatrixAndRHS(*matrix, rhs, permvec,
+                   dsMathEnum::WhatToLoad::PERMUTATIONSONLY,
+                   dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
 
   static const std::pair<const char *, dsMathEnum::TimeMode> loads[] = {
-    {"static",  dsMathEnum::TimeMode::DC},
-    {"dynamic", dsMathEnum::TimeMode::TIME}
-  };
+      {"static", dsMathEnum::TimeMode::DC},
+      {"dynamic", dsMathEnum::TimeMode::TIME}};
 
-  for (const auto &p : loads)
-  {
+  for (const auto &p : loads) {
     rhs.clear();
     rhs.resize(numeqns);
 
-    LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::MATRIXANDRHS, p.second, static_cast<DoubleType>(1.0));
+    LoadMatrixAndRHS(*matrix, rhs, permvec,
+                     dsMathEnum::WhatToLoad::MATRIXANDRHS, p.second,
+                     static_cast<DoubleType>(1.0));
     matrix->Finalize();
 
     ObjectHolderMap_t lmap;
     lmap["ai"] = CreateIntPODArray(matrix->GetAi());
     lmap["ap"] = CreateIntPODArray(matrix->GetAp());
     lmap["av"] = CreateDoublePODArray(matrix->GetReal());
-    lmap["rhs"]  = CreateDoublePODArray(rhs);
+    lmap["rhs"] = CreateDoublePODArray(rhs);
     ohm[p.first] = ObjectHolder(lmap);
 
     matrix.reset();
@@ -570,56 +542,48 @@ void Newton<DoubleType>::GetMatrixAndRHSForExternalUse(CompressionType ct, Objec
     ObjectHolderMap_t lmap;
     std::vector<int> rp(numeqns);
     std::vector<int> rb(numeqns);
-    for (size_t i = 0; i < numeqns; ++i)
-    {
+    for (size_t i = 0; i < numeqns; ++i) {
       const auto &p = permvec[i];
 
       const size_t &row = p.GetRow();
-      if (row != size_t(-1))
-      {
+      if (row != size_t(-1)) {
         rp[i] = static_cast<int>(row);
-      }
-      else
-      {
+      } else {
         rp[i] = -1;
       }
 
-      if (p.KeepCopy())
-      {
+      if (p.KeepCopy()) {
         rb[i] = 1;
       }
     }
-    lmap["row"]  = CreateIntPODArray(rp);
+    lmap["row"] = CreateIntPODArray(rp);
     lmap["copy"] = CreateIntPODArray(rb);
     ohm["permutation"] = ObjectHolder(lmap);
   }
 
+  // now permvecs
 
-// now permvecs
-
-  if (ct == CompressionType::CCM)
-  {
+  if (ct == CompressionType::CCM) {
     ohm["format"] = ObjectHolder("csc");
-  }
-  else if (ct == CompressionType::CRM)
-  {
+  } else if (ct == CompressionType::CRM) {
     ohm["format"] = ObjectHolder("csr");
   }
 }
 
 template <typename DoubleType>
-bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeMethods::TimeParams<DoubleType> &timeinfo, ObjectHolderMap_t *ohm)
-{
+bool Newton<DoubleType>::Solve(
+    LinearSolver<DoubleType> &itermethod,
+    const TimeMethods::TimeParams<DoubleType> &timeinfo,
+    ObjectHolderMap_t *ohm) {
   MasterGILControl gil;
 
   NodeKeeper &nk = NodeKeeper::instance();
   GlobalData &gdata = GlobalData::GetInstance();
-  const GlobalData::DeviceList_t      &dlist = gdata.GetDeviceList();
+  const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
 
   const size_t numeqns = NumberEquationsAndSetDimension();
 
-  if (nk.HaveNodes())
-  {
+  if (nk.HaveNodes()) {
     nk.InitializeSolution("dcop");
   }
 
@@ -629,9 +593,11 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
 
   std::unique_ptr<Matrix<DoubleType>> matrix;
 
-  preconditioner = std::unique_ptr<Preconditioner<DoubleType>>(CreatePreconditioner(itermethod, numeqns));
+  preconditioner = std::unique_ptr<Preconditioner<DoubleType>>(
+      CreatePreconditioner(itermethod, numeqns));
 
-  matrix = std::unique_ptr<Matrix<DoubleType>>(CreateMatrix(preconditioner.get()));
+  matrix =
+      std::unique_ptr<Matrix<DoubleType>>(CreateMatrix(preconditioner.get()));
 
   DoubleVec_t<DoubleType> rhs(numeqns);
 
@@ -643,101 +609,99 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
   ///// Permutation vector
   /////
   permvec_t permvec(numeqns);
-  for (size_t i = 0; i < permvec.size(); ++i)
-  {
+  for (size_t i = 0; i < permvec.size(); ++i) {
     permvec[i] = PermutationEntry(i, false);
   }
 
   DoubleVec_t<DoubleType> result(numeqns);
 
   DoubleVec_t<DoubleType> rhs_constant(numeqns);
-  if (!timeinfo.IsDCMethod())
-  {
+  if (!timeinfo.IsDCMethod()) {
     InitializeTransientAssemble(timeinfo, numeqns, rhs_constant);
   }
 
-
-  LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::PERMUTATIONSONLY, dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+  LoadMatrixAndRHS(*matrix, rhs, permvec,
+                   dsMathEnum::WhatToLoad::PERMUTATIONSONLY,
+                   dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
 
   size_t divergence_count = 0;
-  bool   max_error_hit = false;
+  bool max_error_hit = false;
   DoubleType last_rel_err = 0.0;
   DoubleType last_abs_err = 0.0;
 
   ObjectHolderList_t iteration_list;
 
-  const size_t symbolic_iter_max = (std::getenv("DEVSIM_NEW_SYMBOLIC") == nullptr) ? symbolicIterationLimit : size_t(-1);
+  const size_t symbolic_iter_max =
+      (std::getenv("DEVSIM_NEW_SYMBOLIC") == nullptr) ? symbolicIterationLimit
+                                                      : size_t(-1);
 
-  for (size_t iter = 0; (iter < maxiter) && (!converged) && (divergence_count < maxDivergenceCount); ++iter)
-  {
-    if (max_error_hit)
-    {
+  for (size_t iter = 0; (iter < maxiter) && (!converged) &&
+                        (divergence_count < maxDivergenceCount);
+       ++iter) {
+    if (max_error_hit) {
       break;
     }
 
     ObjectHolderMap_t iteration_map;
     ObjectHolderMap_t *p_iteration_map = nullptr;
-    if (ohm)
-    {
+    if (ohm) {
       p_iteration_map = &iteration_map;
     }
 
     rhs = rhs_constant;
 
-//        std::cerr << "Begin Load Matrix\n";
+    //        std::cerr << "Begin Load Matrix\n";
     /// This is the resistive portion (always assembled
-    if (timeinfo.IsDCOnly())
-    {
-      LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::MATRIXANDRHS, dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
-    }
-    else
-    {
-      LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::MATRIXANDRHS, dsMathEnum::TimeMode::DC, timeinfo.b0);
+    if (timeinfo.IsDCOnly()) {
+      LoadMatrixAndRHS(*matrix, rhs, permvec,
+                       dsMathEnum::WhatToLoad::MATRIXANDRHS,
+                       dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+    } else {
+      LoadMatrixAndRHS(*matrix, rhs, permvec,
+                       dsMathEnum::WhatToLoad::MATRIXANDRHS,
+                       dsMathEnum::TimeMode::DC, timeinfo.b0);
 
       /// This assembles the time derivative current
-      if (timeinfo.a0 != 0.0)
-      {
-        LoadMatrixAndRHS(*matrix, rhs, permvec, dsMathEnum::WhatToLoad::MATRIXANDRHS, dsMathEnum::TimeMode::TIME, timeinfo.a0);
+      if (timeinfo.a0 != 0.0) {
+        LoadMatrixAndRHS(*matrix, rhs, permvec,
+                         dsMathEnum::WhatToLoad::MATRIXANDRHS,
+                         dsMathEnum::TimeMode::TIME, timeinfo.a0);
       }
     }
 
-//        std::cerr << "End Load Matrix\n";
+    //        std::cerr << "End Load Matrix\n";
 
     result.clear();
     result.resize(numeqns);
 
     matrix->Finalize();
 
-//        std::cerr << "Begin Solve Matrix\n";
+    //        std::cerr << "Begin Solve Matrix\n";
     // iter is 0 based
-    if (iter < symbolic_iter_max)
-    {
-      if (auto cm = dynamic_cast<CompressedMatrix<DoubleType> *>(matrix.get()); cm)
-      {
+    if (iter < symbolic_iter_max) {
+      if (auto cm = dynamic_cast<CompressedMatrix<DoubleType> *>(matrix.get());
+          cm) {
         cm->SetSymbolicStatus(SymbolicStatus_t::NEW_SYMBOLIC);
       }
     }
 
     bool solveok = itermethod.Solve(*matrix, *preconditioner, result, rhs);
-    if (!solveok)
-    {
+    if (!solveok) {
       break;
     }
-//        std::cerr << "End Solve Matrix\n";
+    //        std::cerr << "End Solve Matrix\n";
 
     {
-      GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+      GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
       GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-      for ( ; dit != dend; ++dit)
-      {
+      for (; dit != dend; ++dit) {
         std::string name = (dit->first);
-        Device *dev =      (dit->second);
+        Device *dev = (dit->second);
         dev->Update(result);
       }
     }
 
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       CallUpdateSolution(nk, "dcop", result);
       nk.TriggerCallbacksOnNodes();
     }
@@ -745,36 +709,29 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
     PrintIteration(iter, p_iteration_map);
     {
       converged = true;
-      GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+      GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
       GlobalData::DeviceList_t::const_iterator dend = dlist.end();
       ObjectHolderList_t dobjlist;
-      for ( ; dit != dend; ++dit)
-      {
+      for (; dit != dend; ++dit) {
         const Device &device = *(dit->second);
         const DoubleType devrerr = device.GetRelError<DoubleType>();
         const DoubleType devaerr = device.GetAbsError<DoubleType>();
 
-        if (ohm)
-        {
+        if (ohm) {
           ObjectHolderMap_t dmap;
           PrintDeviceErrors(device, &dmap);
           dobjlist.push_back(ObjectHolder(dmap));
-        }
-        else
-        {
+        } else {
           PrintDeviceErrors(device, ohm);
         }
 
-
-        /* if are our is higher than our convergence criteria and it is running away*/
-        bool diverged = ((devrerr > relLimit) && (devrerr > last_rel_err))
-           || ((devaerr > absLimit) && (devaerr > last_abs_err));
-        if (diverged)
-        {
+        /* if are our is higher than our convergence criteria and it is running
+         * away*/
+        bool diverged = ((devrerr > relLimit) && (devrerr > last_rel_err)) ||
+                        ((devaerr > absLimit) && (devaerr > last_abs_err));
+        if (diverged) {
           divergence_count += 1;
-        }
-        else
-        {
+        } else {
           divergence_count = 0;
         }
         last_rel_err = devrerr;
@@ -784,13 +741,11 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
 
         max_error_hit = max_error_hit || (devaerr > maxLimit);
       }
-      if (p_iteration_map)
-      {
+      if (p_iteration_map) {
         (*p_iteration_map)["devices"] = ObjectHolder(dobjlist);
       }
 
-      if (nk.HaveNodes())
-      {
+      if (nk.HaveNodes()) {
         const DoubleType cirrerr = nk.GetRelError("dcop");
         const DoubleType ciraerr = nk.GetAbsError("dcop");
         PrintCircuitErrors(p_iteration_map);
@@ -800,63 +755,54 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
     }
 
     matrix->ClearMatrix();
-    if (p_iteration_map)
-    {
+    if (p_iteration_map) {
       iteration_list.push_back(ObjectHolder(iteration_map));
     }
   }
 
   DoubleVec_t<DoubleType> newI;
   DoubleVec_t<DoubleType> newQ;
-  if (timeinfo.IsTransient())
-  {
+  if (timeinfo.IsTransient()) {
     //// New charge based on new assemble
     newQ.resize(numeqns);
-    LoadMatrixAndRHS(*matrix, newQ, permvec, dsMathEnum::WhatToLoad::RHS, dsMathEnum::TimeMode::TIME, static_cast<DoubleType>(1.0));
+    LoadMatrixAndRHS(*matrix, newQ, permvec, dsMathEnum::WhatToLoad::RHS,
+                     dsMathEnum::TimeMode::TIME, static_cast<DoubleType>(1.0));
 
     //// Check to see if your projection was correct
-    if (timeinfo.IsIntegration())
-    {
+    if (timeinfo.IsIntegration()) {
       converged = converged && CheckTransientProjection(timeinfo, newQ, ohm);
     }
   }
 
-  if (!converged)
-  {
+  if (!converged) {
     RestoreSolutions();
-  }
-  else
-  {
+  } else {
 
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::string name = (dit->first);
-      Device *dev =      (dit->second);
+      Device *dev = (dit->second);
       dev->UpdateContacts();
     }
 
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       auto dbent = gdata.GetDBEntryOnGlobal("debug_level");
-      if (OutputStream::GetVerbosity(dbent.second.GetString()) != OutputStream::Verbosity_t::V0)
-      {
+      if (OutputStream::GetVerbosity(dbent.second.GetString()) !=
+          OutputStream::Verbosity_t::V0) {
         nk.PrintSolution("dcop");
       }
     }
 
-    if (timeinfo.IsTransient())
-    {
+    if (timeinfo.IsTransient()) {
       newI.resize(numeqns);
-      LoadMatrixAndRHS(*matrix, newI, permvec, dsMathEnum::WhatToLoad::RHS, dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
+      LoadMatrixAndRHS(*matrix, newI, permvec, dsMathEnum::WhatToLoad::RHS,
+                       dsMathEnum::TimeMode::DC, static_cast<DoubleType>(1.0));
       UpdateTransientCurrent(timeinfo, numeqns, newI, newQ);
     }
-
   }
 
-  if (ohm)
-  {
+  if (ohm) {
     (*ohm)["iterations"] = ObjectHolder(iteration_list);
     (*ohm)["converged"] = ObjectHolder(converged);
   }
@@ -865,43 +811,36 @@ bool Newton<DoubleType>::Solve(LinearSolver<DoubleType> &itermethod, const TimeM
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::PrintNumberEquations(size_t numeqns, ObjectHolderMap_t *ohm)
-{
+void Newton<DoubleType>::PrintNumberEquations(size_t numeqns,
+                                              ObjectHolderMap_t *ohm) {
   std::ostringstream os;
   os << "number of equations " << numeqns << "\n";
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-  if (ohm)
-  {
+  if (ohm) {
     (*ohm)["number_of_equations"] = ObjectHolder(static_cast<int>(numeqns));
   }
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::PrintIteration(size_t iter, ObjectHolderMap_t *ohm)
-{
+void Newton<DoubleType>::PrintIteration(size_t iter, ObjectHolderMap_t *ohm) {
   std::ostringstream os;
   os << "Iteration: " << iter << "\n";
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-  if (ohm)
-  {
+  if (ohm) {
     (*ohm)["iteration"] = ObjectHolder(static_cast<int>(iter));
   }
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::PrintCircuitErrors(ObjectHolderMap_t *ohm)
-{
+void Newton<DoubleType>::PrintCircuitErrors(ObjectHolderMap_t *ohm) {
   NodeKeeper &nk = NodeKeeper::instance();
   const double cirrerr = nk.GetRelError("dcop");
   const double ciraerr = nk.GetAbsError("dcop");
   std::ostringstream os;
-  os << "  Circuit: "
-      << std::scientific << std::setprecision(5) <<
-               "\tRelError: " << cirrerr <<
-               "\tAbsError: " << ciraerr << "\n";
+  os << "  Circuit: " << std::scientific << std::setprecision(5)
+     << "\tRelError: " << cirrerr << "\tAbsError: " << ciraerr << "\n";
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
-  if (ohm)
-  {
+  if (ohm) {
     ObjectHolderMap_t cir;
     cir["relative_error"] = ObjectHolder(cirrerr);
     cir["absolute_error"] = ObjectHolder(ciraerr);
@@ -910,8 +849,8 @@ void Newton<DoubleType>::PrintCircuitErrors(ObjectHolderMap_t *ohm)
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::PrintDeviceErrors(const Device &device, ObjectHolderMap_t *ohm)
-{
+void Newton<DoubleType>::PrintDeviceErrors(const Device &device,
+                                           ObjectHolderMap_t *ohm) {
   const std::string &name = device.GetName();
   const DoubleType devrerr = device.GetRelError<DoubleType>();
   const DoubleType devaerr = device.GetAbsError<DoubleType>();
@@ -922,64 +861,62 @@ void Newton<DoubleType>::PrintDeviceErrors(const Device &device, ObjectHolderMap
 
   std::ostringstream os;
 
-  os << "  Device: \"" << name << "\""
-      << std::scientific << std::setprecision(5) <<
-               "\tRelError: " << devrerr <<
-               "\tAbsError: " << devaerr << "\n";
+  os << "  Device: \"" << name << "\"" << std::scientific
+     << std::setprecision(5) << "\tRelError: " << devrerr
+     << "\tAbsError: " << devaerr << "\n";
 
   GlobalData &gdata = GlobalData::GetInstance();
 
   bool show_error_node = false;
 
   const Device::RegionList_t regions = device.GetRegionList();
-  for (Device::RegionList_t::const_iterator rit = regions.begin(); rit != regions.end(); ++rit)
-  {
+  for (Device::RegionList_t::const_iterator rit = regions.begin();
+       rit != regions.end(); ++rit) {
     const Region &region = *(rit->second);
 
-    if (region.GetNumberEquations() == 0)
-    {
+    if (region.GetNumberEquations() == 0) {
       continue;
     }
 
-    os << "    Region: \"" << region.GetName() << "\""
-        << std::scientific << std::setprecision(5) <<
-                 "\tRelError: " << region.GetRelError<DoubleType>() <<
-                 "\tAbsError: " << region.GetAbsError<DoubleType>() << "\n";
+    os << "    Region: \"" << region.GetName() << "\"" << std::scientific
+       << std::setprecision(5)
+       << "\tRelError: " << region.GetRelError<DoubleType>()
+       << "\tAbsError: " << region.GetAbsError<DoubleType>() << "\n";
 
     const EquationPtrMap_t &equations = region.GetEquationPtrList();
-    for (EquationPtrMap_t::const_iterator eit = equations.begin(); eit != equations.end(); ++eit)
-    {
+    for (EquationPtrMap_t::const_iterator eit = equations.begin();
+         eit != equations.end(); ++eit) {
       const EquationHolder &equation = (eit->second);
       os << "      Equation: \"" << equation.GetName() << "\""
-          << std::scientific << std::setprecision(5) <<
-                   "\tRelError: " << equation.GetRelError<DoubleType>() <<
-                   "\tAbsError: " << equation.GetAbsError<DoubleType>() << "\n";
+         << std::scientific << std::setprecision(5)
+         << "\tRelError: " << equation.GetRelError<DoubleType>()
+         << "\tAbsError: " << equation.GetAbsError<DoubleType>() << "\n";
 
-      auto dbent = gdata.GetDBEntryOnRegion(name, region.GetName(), "debug_level");
-      if (dbent.first)
-      {
+      auto dbent =
+          gdata.GetDBEntryOnRegion(name, region.GetName(), "debug_level");
+      if (dbent.first) {
         // show for all levels except basic one
-        show_error_node = (OutputStream::GetVerbosity(dbent.second.GetString()) != OutputStream::Verbosity_t::V0);
+        show_error_node =
+            (OutputStream::GetVerbosity(dbent.second.GetString()) !=
+             OutputStream::Verbosity_t::V0);
       }
-      if (show_error_node)
-      {
-        os << "\tRelErrorNode: " << equation.GetRelErrorNodeIndex() <<
-              "\tAbsErrorNode: " << equation.GetAbsErrorNodeIndex() << "\n";
+      if (show_error_node) {
+        os << "\tRelErrorNode: " << equation.GetRelErrorNodeIndex()
+           << "\tAbsErrorNode: " << equation.GetAbsErrorNodeIndex() << "\n";
       }
     }
   }
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
 
-  if (ohm)
-  {
+  if (ohm) {
     ObjectHolderMap_t &dmap = *ohm;
     dmap["name"] = ObjectHolder(name);
     dmap["relative_error"] = ObjectHolder(static_cast<double>(devrerr));
     dmap["absolute_error"] = ObjectHolder(static_cast<double>(devaerr));
 
     ObjectHolderList_t rlist;
-    for (Device::RegionList_t::const_iterator rit = regions.begin(); rit != regions.end(); ++rit)
-    {
+    for (Device::RegionList_t::const_iterator rit = regions.begin();
+         rit != regions.end(); ++rit) {
       const Region &region = *(rit->second);
       ObjectHolderMap_t rmap;
       rmap["name"] = ObjectHolder(region.GetName());
@@ -988,15 +925,17 @@ void Newton<DoubleType>::PrintDeviceErrors(const Device &device, ObjectHolderMap
 
       ObjectHolderList_t elist;
       const EquationPtrMap_t &equations = region.GetEquationPtrList();
-      for (EquationPtrMap_t::const_iterator eit = equations.begin(); eit != equations.end(); ++eit)
-      {
+      for (EquationPtrMap_t::const_iterator eit = equations.begin();
+           eit != equations.end(); ++eit) {
         const EquationHolder &equation = (eit->second);
         ObjectHolderMap_t emap;
         emap["name"] = ObjectHolder(equation.GetName());
         emap["relative_error"] = ObjectHolder(equation.GetRelError<double>());
-        emap["relative_error_node"] = ObjectHolder(static_cast<int>(equation.GetRelErrorNodeIndex()));
+        emap["relative_error_node"] =
+            ObjectHolder(static_cast<int>(equation.GetRelErrorNodeIndex()));
         emap["absolute_error"] = ObjectHolder(equation.GetAbsError<double>());
-        emap["absolute_error_node"] = ObjectHolder(static_cast<int>(equation.GetAbsErrorNodeIndex()));
+        emap["absolute_error_node"] =
+            ObjectHolder(static_cast<int>(equation.GetAbsErrorNodeIndex()));
         elist.push_back(ObjectHolder(emap));
       }
       rmap["equations"] = ObjectHolder(elist);
@@ -1007,31 +946,29 @@ void Newton<DoubleType>::PrintDeviceErrors(const Device &device, ObjectHolderMap
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::InitializeTransientAssemble(const TimeMethods::TimeParams<DoubleType> &timeinfo, size_t numeqns, DoubleVec_t<DoubleType> &rhs_constant)
-{
+void Newton<DoubleType>::InitializeTransientAssemble(
+    const TimeMethods::TimeParams<DoubleType> &timeinfo, size_t numeqns,
+    DoubleVec_t<DoubleType> &rhs_constant) {
   TimeData<DoubleType> &tinst = TimeData<DoubleType>::GetInstance();
-  if (timeinfo.a1 != 0.0)
-  {
+  if (timeinfo.a1 != 0.0) {
     tinst.AssembleQ(TimePoint_t::TM0, timeinfo.a1, rhs_constant);
   }
-  if (timeinfo.a2 != 0.0)
-  {
+  if (timeinfo.a2 != 0.0) {
     tinst.AssembleQ(TimePoint_t::TM1, timeinfo.a2, rhs_constant);
   }
 
-  if (timeinfo.b1 != 0.0)
-  {
+  if (timeinfo.b1 != 0.0) {
     tinst.AssembleI(TimePoint_t::TM0, timeinfo.b1, rhs_constant);
   }
-  if (timeinfo.b2 != 0.0)
-  {
+  if (timeinfo.b2 != 0.0) {
     tinst.AssembleI(TimePoint_t::TM1, timeinfo.b2, rhs_constant);
   }
 }
 
 template <typename DoubleType>
-bool Newton<DoubleType>::CheckTransientProjection(const TimeMethods::TimeParams<DoubleType> &timeinfo, const DoubleVec_t<DoubleType> &newQ, ObjectHolderMap_t *ohm)
-{
+bool Newton<DoubleType>::CheckTransientProjection(
+    const TimeMethods::TimeParams<DoubleType> &timeinfo,
+    const DoubleVec_t<DoubleType> &newQ, ObjectHolderMap_t *ohm) {
   const size_t numeqns = newQ.size();
   bool converged = true;
   /// need to make sure projection makes sense
@@ -1039,45 +976,42 @@ bool Newton<DoubleType>::CheckTransientProjection(const TimeMethods::TimeParams<
 
   TimeData<DoubleType> &tinst = TimeData<DoubleType>::GetInstance();
 
-  tinst.AssembleI(TimePoint_t::TM0, - timeinfo.tdelta, projectQ);
-  tinst.AssembleQ(TimePoint_t::TM0, 1.0,    projectQ);
+  tinst.AssembleI(TimePoint_t::TM0, -timeinfo.tdelta, projectQ);
+  tinst.AssembleQ(TimePoint_t::TM0, 1.0, projectQ);
 
   DoubleType qrel = 0.0;
-  for (size_t i = 0; i < numeqns; ++i)
-  {
+  for (size_t i = 0; i < numeqns; ++i) {
     const DoubleType &qproj = projectQ[i];
-    const DoubleType &qnew  = newQ[i];
-    if (qnew != 0.0)
-    {
-      const DoubleType qr = abs(qnew - qproj)/(1.0e-20 + abs(qnew) + abs(qproj));
-      if (qr > qrel)
-      {
+    const DoubleType &qnew = newQ[i];
+    if (qnew != 0.0) {
+      const DoubleType qr =
+          abs(qnew - qproj) / (1.0e-20 + abs(qnew) + abs(qproj));
+      if (qr > qrel) {
         qrel = qr;
       }
     }
   }
   std::ostringstream os;
-  os << "Charge Relative Error " << std::scientific << std::setprecision(5) << qrel << "\n";
+  os << "Charge Relative Error " << std::scientific << std::setprecision(5)
+     << qrel << "\n";
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
 
-  if (ohm)
-  {
+  if (ohm) {
     (*ohm)["charge_error"] = ObjectHolder(static_cast<double>(qrel));
   };
 
-  if (qrel > qrelLimit)
-  {
+  if (qrel > qrelLimit) {
     converged = false;
   }
   return converged;
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::UpdateTransientCurrent(const TimeMethods::TimeParams<DoubleType> &timeinfo, size_t numeqns, const DoubleVec_t<DoubleType> &newI, const DoubleVec_t<DoubleType> &newQ)
-{
+void Newton<DoubleType>::UpdateTransientCurrent(
+    const TimeMethods::TimeParams<DoubleType> &timeinfo, size_t numeqns,
+    const DoubleVec_t<DoubleType> &newI, const DoubleVec_t<DoubleType> &newQ) {
   TimeData<DoubleType> &tinst = TimeData<DoubleType>::GetInstance();
-  if (timeinfo.IsDCMethod())
-  {
+  if (timeinfo.IsDCMethod()) {
     //// There is no displacement current for a dc solution
     tinst.SetI(TimePoint_t::TM0, newI);
     tinst.SetQ(TimePoint_t::TM0, newQ);
@@ -1086,30 +1020,23 @@ void Newton<DoubleType>::UpdateTransientCurrent(const TimeMethods::TimeParams<Do
     tinst.ClearI(TimePoint_t::TM2);
     tinst.ClearQ(TimePoint_t::TM1);
     tinst.ClearQ(TimePoint_t::TM2);
-  }
-  else
-  {
+  } else {
     ////// Charge
 
-    if (tinst.ExistsQ(TimePoint_t::TM1))
-    {
+    if (tinst.ExistsQ(TimePoint_t::TM1)) {
       tinst.CopyQ(TimePoint_t::TM1, TimePoint_t::TM2);
     }
-    if (tinst.ExistsQ(TimePoint_t::TM0))
-    {
+    if (tinst.ExistsQ(TimePoint_t::TM0)) {
       tinst.CopyQ(TimePoint_t::TM0, TimePoint_t::TM1);
     }
 
     tinst.SetQ(TimePoint_t::TM0, newQ);
 
-
     ////// Current
-    if (tinst.ExistsI(TimePoint_t::TM1))
-    {
+    if (tinst.ExistsI(TimePoint_t::TM1)) {
       tinst.CopyI(TimePoint_t::TM1, TimePoint_t::TM2);
     }
-    if (tinst.ExistsI(TimePoint_t::TM0))
-    {
+    if (tinst.ExistsI(TimePoint_t::TM0)) {
       tinst.CopyI(TimePoint_t::TM0, TimePoint_t::TM1);
     }
 
@@ -1148,35 +1075,35 @@ void Newton<DoubleType>::UpdateTransientCurrent(const TimeMethods::TimeParams<Do
 }
 
 template <typename DoubleType>
-bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod, DoubleType frequency)
-{
+bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod,
+                                 DoubleType frequency) {
   MasterGILControl gil;
 
   NodeKeeper &nk = NodeKeeper::instance();
   GlobalData &gdata = GlobalData::GetInstance();
-  const GlobalData::DeviceList_t      &dlist = gdata.GetDeviceList();
+  const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
 
   const size_t numeqns = NumberEquationsAndSetDimension();
 
-  if (nk.HaveNodes())
-  {
+  if (nk.HaveNodes()) {
     nk.InitializeSolution("ssac_real");
     nk.InitializeSolution("ssac_imag");
     nk.InitializeSolution("dcop");
   }
 
+  std::unique_ptr<Preconditioner<DoubleType>> preconditioner(
+      CreateACPreconditioner<DoubleType>(PEnum::TransposeType_t::NOTRANS,
+                                         numeqns));
 
-  std::unique_ptr<Preconditioner<DoubleType>> preconditioner(CreateACPreconditioner<DoubleType>(PEnum::TransposeType_t::NOTRANS, numeqns));
-
-  std::unique_ptr<Matrix<DoubleType>> matrix(CreateACMatrix<DoubleType>(preconditioner.get()));
+  std::unique_ptr<Matrix<DoubleType>> matrix(
+      CreateACMatrix<DoubleType>(preconditioner.get()));
 
   ComplexDoubleVec_t<DoubleType> rhs(numeqns);
 
   /// This is to initialize other copies
   permvec_t permvec_temp(numeqns);
 
-  for (size_t i = 0; i < permvec_temp.size(); ++i)
-  {
+  for (size_t i = 0; i < permvec_temp.size(); ++i) {
     permvec_temp[i] = PermutationEntry(i, false);
   }
 
@@ -1184,11 +1111,10 @@ bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod, DoubleTyp
 
   bool converged = false;
 
-  do
-  {
+  do {
     permvec_t permvec(permvec_temp);
 
-  ///// TODO: would be nice to only have to change the frequency dep entries
+    ///// TODO: would be nice to only have to change the frequency dep entries
     LoadMatrixAndRHSAC(*matrix, rhs, permvec, frequency);
     LoadCircuitRHSAC(rhs);
 
@@ -1196,25 +1122,21 @@ bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod, DoubleTyp
 
     bool solveok = itermethod.ACSolve(*matrix, *preconditioner, result, rhs);
     converged = solveok;
-    if (!solveok)
-    {
+    if (!solveok) {
       break;
     }
 
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::string name = (dit->first);
-      Device *dev =      (dit->second);
+      Device *dev = (dit->second);
       dev->ACUpdate<DoubleType>(result);
     }
 
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       CallACUpdateSolution(nk, "ssac_real", "ssac_imag", result);
     }
-
 
     {
       std::ostringstream os;
@@ -1223,11 +1145,10 @@ bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod, DoubleTyp
       OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
     }
 
-    if (nk.HaveNodes())
-    {
+    if (nk.HaveNodes()) {
       auto dbent = gdata.GetDBEntryOnGlobal("debug_level");
-      if (OutputStream::GetVerbosity(dbent.second.GetString()) != OutputStream::Verbosity_t::V0)
-      {
+      if (OutputStream::GetVerbosity(dbent.second.GetString()) !=
+          OutputStream::Verbosity_t::V0) {
         nk.ACPrintSolution("ssac_real", "ssac_imag");
       }
     }
@@ -1237,8 +1158,9 @@ bool Newton<DoubleType>::ACSolve(LinearSolver<DoubleType> &itermethod, DoubleTyp
 }
 
 template <typename DoubleType>
-bool Newton<DoubleType>::NoiseSolve(const std::string &output_name, LinearSolver<DoubleType> &itermethod, DoubleType frequency)
-{
+bool Newton<DoubleType>::NoiseSolve(const std::string &output_name,
+                                    LinearSolver<DoubleType> &itermethod,
+                                    DoubleType frequency) {
   MasterGILControl gil;
 
   NodeKeeper &nk = NodeKeeper::instance();
@@ -1246,93 +1168,90 @@ bool Newton<DoubleType>::NoiseSolve(const std::string &output_name, LinearSolver
 
   size_t outputeqnnum = size_t(-1);
 
-  if (!nk.HaveNodes())
-  {
+  if (!nk.HaveNodes()) {
     std::ostringstream os;
     os << "A circuit is required for a noise solve.\n";
     OutputStream::WriteOut(OutputStream::OutputType::ERROR, os.str());
     return false;
     //// Should probably abort here
-  }
-  else
-  {
+  } else {
     outputeqnnum = nk.GetEquationNumber(output_name);
   }
 
-  if (outputeqnnum == size_t(-1))
-  {
+  if (outputeqnnum == size_t(-1)) {
     std::ostringstream os;
     os << "Circuit output " << output_name << " does not exist.\n";
     OutputStream::WriteOut(OutputStream::OutputType::ERROR, os.str());
     return false;
     //// Should probably abort here
-  }
-  else
-  {
+  } else {
     std::ostringstream os;
-    os << "Circuit output " << output_name << " has equation " << outputeqnnum << ".\n";
+    os << "Circuit output " << output_name << " has equation " << outputeqnnum
+       << ".\n";
     OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
   }
 
   GlobalData &gdata = GlobalData::GetInstance();
-  const GlobalData::DeviceList_t      &dlist = gdata.GetDeviceList();
+  const GlobalData::DeviceList_t &dlist = gdata.GetDeviceList();
 
-  const std::string circuit_real_name = std::string("noise_") + output_name + "_real";
-  const std::string circuit_imag_name = std::string("noise_") + output_name + "_imag";
+  const std::string circuit_real_name =
+      std::string("noise_") + output_name + "_real";
+  const std::string circuit_imag_name =
+      std::string("noise_") + output_name + "_imag";
 
   nk.InitializeSolution(circuit_real_name);
   nk.InitializeSolution(circuit_imag_name);
   nk.InitializeSolution("dcop");
 
-  std::unique_ptr<Preconditioner<DoubleType>> preconditioner(CreateACPreconditioner<DoubleType>(PEnum::TransposeType_t::TRANS, numeqns));
+  std::unique_ptr<Preconditioner<DoubleType>> preconditioner(
+      CreateACPreconditioner<DoubleType>(PEnum::TransposeType_t::TRANS,
+                                         numeqns));
 
-  std::unique_ptr<Matrix<DoubleType>> matrix(CreateACMatrix<DoubleType>(preconditioner.get()));
+  std::unique_ptr<Matrix<DoubleType>> matrix(
+      CreateACMatrix<DoubleType>(preconditioner.get()));
 
   ComplexDoubleVec_t<DoubleType> rhs(numeqns);
 
   /// This is to initialize other copies
   permvec_t permvec_temp(numeqns);
 
-  for (size_t i = 0; i < permvec_temp.size(); ++i)
-  {
-      permvec_temp[i] = PermutationEntry(i, false);
+  for (size_t i = 0; i < permvec_temp.size(); ++i) {
+    permvec_temp[i] = PermutationEntry(i, false);
   }
 
   ComplexDoubleVec_t<DoubleType> result(numeqns);
 
   bool converged = false;
 
-  do
-  {
+  do {
     permvec_t permvec(permvec_temp);
 
-  ///// TODO: would be nice to only have to change the frequency dep entries
+    ///// TODO: would be nice to only have to change the frequency dep entries
     LoadMatrixAndRHSAC(*matrix, rhs, permvec, frequency);
 
-    /// Since the circuit nodes are not permutated, we don't need to permutate the rhs
-    //// TODO: PUBLISH, we can't update contact nodes, since they are solving a different equation!!!!
+    /// Since the circuit nodes are not permutated, we don't need to permutate
+    /// the rhs
+    //// TODO: PUBLISH, we can't update contact nodes, since they are solving a
+    ///different equation!!!!
     rhs[outputeqnnum] = 1.0;
 
     matrix->Finalize();
 
     bool solveok = itermethod.NoiseSolve(*matrix, *preconditioner, result, rhs);
     converged = solveok;
-    if (!solveok)
-    {
+    if (!solveok) {
       break;
     }
 
-    GlobalData::DeviceList_t::const_iterator dit  = dlist.begin();
+    GlobalData::DeviceList_t::const_iterator dit = dlist.begin();
     GlobalData::DeviceList_t::const_iterator dend = dlist.end();
-    for ( ; dit != dend; ++dit)
-    {
+    for (; dit != dend; ++dit) {
       std::string name = (dit->first);
-      Device *dev =      (dit->second);
+      Device *dev = (dit->second);
       dev->NoiseUpdate<DoubleType>(output_name, permvec, result);
     }
 
     CallACUpdateSolution(nk, circuit_real_name, circuit_imag_name, result);
-
 
     {
       std::ostringstream os;
@@ -1347,74 +1266,70 @@ bool Newton<DoubleType>::NoiseSolve(const std::string &output_name, LinearSolver
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::AssembleTclEquation(const std::string &name, ObjectHolder &matrix_objects, ObjectHolder &rhs_objects, RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs, dsMathEnum::WhatToLoad w)
-{
+void Newton<DoubleType>::AssembleTclEquation(
+    const std::string &name, ObjectHolder &matrix_objects,
+    ObjectHolder &rhs_objects, RealRowColValueVec<DoubleType> &mat,
+    RHSEntryVec<DoubleType> &rhs, dsMathEnum::WhatToLoad w) {
   std::vector<ObjectHolder> objects;
 
   //// Read in the entries here
-  if (w != dsMathEnum::WhatToLoad::MATRIXONLY)
-  {
+  if (w != dsMathEnum::WhatToLoad::MATRIXONLY) {
     bool ok = rhs_objects.GetListOfObjects(objects);
     size_t len = objects.size();
 
-    if ((!ok) || ((len % 2) != 0))
-    {
+    if ((!ok) || ((len % 2) != 0)) {
       std::ostringstream os;
-      os << "Error when evaluating custom_equation \"" << name << "\" rhs entry list of length \"" << len << "\" is not divisible by 2\n";
+      os << "Error when evaluating custom_equation \"" << name
+         << "\" rhs entry list of length \"" << len
+         << "\" is not divisible by 2\n";
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
-    }
-    else
-    {
-      for (size_t i = 0; i < len; i += 2)
-      {
+    } else {
+      for (size_t i = 0; i < len; i += 2) {
         ObjectHolder::IntegerEntry_t row = objects[i].GetInteger();
         ObjectHolder::DoubleEntry_t val = objects[i + 1].GetDouble();
 
-        if (row.first && val.first)
-        {
+        if (row.first && val.first) {
           rhs.push_back(std::make_pair(row.second, val.second));
-        }
-        else
-        {
+        } else {
           std::ostringstream os;
-          os << "Error when evaluating custom_equation \"" << name << "\" rhs val entry " << objects[i].GetString() << " " << objects[i+1].GetString() << "\n";
-          OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
+          os << "Error when evaluating custom_equation \"" << name
+             << "\" rhs val entry " << objects[i].GetString() << " "
+             << objects[i + 1].GetString() << "\n";
+          OutputStream::WriteOut(OutputStream::OutputType::FATAL,
+                                 os.str().c_str());
         }
-
       }
     }
   }
 
-  if (w != dsMathEnum::WhatToLoad::RHS)
-  {
+  if (w != dsMathEnum::WhatToLoad::RHS) {
     bool ok = matrix_objects.GetListOfObjects(objects);
     size_t len = objects.size();
 
-    if ((!ok) || ((len % 3) != 0))
-    {
+    if ((!ok) || ((len % 3) != 0)) {
       std::ostringstream os;
-      os << "Error when evaluating custom_equation \"" << name << "\" matrix entry list of length \"" << len << "\" is not divisible by 3\n";
+      os << "Error when evaluating custom_equation \"" << name
+         << "\" matrix entry list of length \"" << len
+         << "\" is not divisible by 3\n";
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
-    }
-    else
-    {
+    } else {
 
-      for (size_t i = 0; i < len; i += 3)
-      {
+      for (size_t i = 0; i < len; i += 3) {
         ObjectHolder::IntegerEntry_t row = objects[i].GetInteger();
         ObjectHolder::IntegerEntry_t col = objects[i + 1].GetInteger();
-        ObjectHolder::DoubleEntry_t  val = objects[i + 2].GetDouble();
+        ObjectHolder::DoubleEntry_t val = objects[i + 2].GetDouble();
 
-        if (row.first && col.first && val.first)
-        {
-          mat.push_back(RealRowColVal<DoubleType>(row.second, col.second, val.second));
-        }
-        else
-        {
+        if (row.first && col.first && val.first) {
+          mat.push_back(
+              RealRowColVal<DoubleType>(row.second, col.second, val.second));
+        } else {
           std::ostringstream os;
-          os << "Error when evaluating custom_equation \"" << name << "\" matrix entry " <<
-            objects[i].GetString() << " " << objects[i+1].GetString() << " " << objects[i+2].GetString() << "\n";
-          OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
+          os << "Error when evaluating custom_equation \"" << name
+             << "\" matrix entry " << objects[i].GetString() << " "
+             << objects[i + 1].GetString() << " " << objects[i + 2].GetString()
+             << "\n";
+          OutputStream::WriteOut(OutputStream::OutputType::FATAL,
+                                 os.str().c_str());
         }
       }
     }
@@ -1422,8 +1337,10 @@ void Newton<DoubleType>::AssembleTclEquation(const std::string &name, ObjectHold
 }
 
 template <typename DoubleType>
-void Newton<DoubleType>::AssembleTclEquations(RealRowColValueVec<DoubleType> &pmat, RHSEntryVec<DoubleType> &prhs, RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs, dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t)
-{
+void Newton<DoubleType>::AssembleTclEquations(
+    RealRowColValueVec<DoubleType> &pmat, RHSEntryVec<DoubleType> &prhs,
+    RealRowColValueVec<DoubleType> &mat, RHSEntryVec<DoubleType> &rhs,
+    dsMathEnum::WhatToLoad w, dsMathEnum::TimeMode t) {
   /*
     pmat, prhs will be row permutated before loading into matrix
     mat, rhs are loaded with the recorded equation numbers
@@ -1433,23 +1350,22 @@ void Newton<DoubleType>::AssembleTclEquations(RealRowColValueVec<DoubleType> &pm
   const GlobalData::TclEquationList_t &tlist = gdata.GetTclEquationList();
 
   std::vector<ObjectHolder> arguments{
-    ObjectHolder(dsMathEnum::WhatToLoadString[static_cast<size_t>(w)]),
-    ObjectHolder(dsMathEnum::TimeModeString[static_cast<size_t>(t)])
-  };
+      ObjectHolder(dsMathEnum::WhatToLoadString[static_cast<size_t>(w)]),
+      ObjectHolder(dsMathEnum::TimeModeString[static_cast<size_t>(t)])};
 
   Interpreter MyInterp;
   std::string result;
-  for (GlobalData::TclEquationList_t::const_iterator it = tlist.begin(); it != tlist.end(); ++it)
-  {
+  for (GlobalData::TclEquationList_t::const_iterator it = tlist.begin();
+       it != tlist.end(); ++it) {
     const std::string &name = it->first;
     auto proc = it->second;
 
     bool ok = MyInterp.RunCommand(proc, arguments);
 
-    if (!ok)
-    {
+    if (!ok) {
       std::ostringstream os;
-      os << "Error when evaluating custom_equation \"" << name << "\" with result \"" << MyInterp.GetErrorString() << "\"\n";
+      os << "Error when evaluating custom_equation \"" << name
+         << "\" with result \"" << MyInterp.GetErrorString() << "\"\n";
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
     }
 
@@ -1457,10 +1373,11 @@ void Newton<DoubleType>::AssembleTclEquations(RealRowColValueVec<DoubleType> &pm
     ObjectHolder result = MyInterp.GetResult();
     ok = result.GetListOfObjects(objects);
 
-    if ((!ok) || (objects.size() != 3))
-    {
+    if ((!ok) || (objects.size() != 3)) {
       std::ostringstream os;
-      os << "Error when evaluating custom_equation \"" << name << "\" cannot extract list of length 3 containing matrix, rhs entries, and boolean denoting permutation\n";
+      os << "Error when evaluating custom_equation \"" << name
+         << "\" cannot extract list of length 3 containing matrix, rhs "
+            "entries, and boolean denoting permutation\n";
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
     }
 
@@ -1469,19 +1386,16 @@ void Newton<DoubleType>::AssembleTclEquations(RealRowColValueVec<DoubleType> &pm
 
     auto is_bulk = objects[2].GetBoolean();
 
-    if (!is_bulk.first)
-    {
+    if (!is_bulk.first) {
       std::ostringstream os;
-      os << "Error when evaluating custom_equation \"" << name << "\" cannot extract 3rd argument for boolean denoting permutation\n";
+      os << "Error when evaluating custom_equation \"" << name
+         << "\" cannot extract 3rd argument for boolean denoting permutation\n";
       OutputStream::WriteOut(OutputStream::OutputType::FATAL, os.str().c_str());
     }
 
-    if (is_bulk.second)
-    {
+    if (is_bulk.second) {
       AssembleTclEquation(name, matrix_objects, rhs_objects, pmat, prhs, w);
-    }
-    else
-    {
+    } else {
       AssembleTclEquation(name, matrix_objects, rhs_objects, mat, rhs, w);
     }
   }
@@ -1491,5 +1405,4 @@ template class Newton<double>;
 #ifdef DEVSIM_EXTENDED_PRECISION
 template class Newton<float128>;
 #endif
-}/// end namespace dsMath
-
+} // namespace dsMath

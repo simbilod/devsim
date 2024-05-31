@@ -10,53 +10,42 @@ SPDX-License-Identifier: Apache-2.0
 #include <limits>
 
 namespace {
-template <typename DoubleType>
-DoubleType GetLogEpsilon()
-{
+template <typename DoubleType> DoubleType GetLogEpsilon() {
   // https://stackoverflow.com/questions/1661529/is-meyers-implementation-of-the-singleton-pattern-thread-safe
-  // If control enters the declaration concurrently while the variable is being initialized,
-  // the concurrent execution shall wait for completion of the initialization.
+  // If control enters the declaration concurrently while the variable is being
+  // initialized, the concurrent execution shall wait for completion of the
+  // initialization.
   static auto ret = fabs(log(std::numeric_limits<DoubleType>().epsilon()));
   return ret;
 }
-}
+} // namespace
 
-template <typename DoubleType>
-DoubleType BernoulliImpl(DoubleType x)
-{
+template <typename DoubleType> DoubleType BernoulliImpl(DoubleType x) {
   DoubleType ret = 1.0;
   const auto fx = fabs(x);
 
-
   static const auto pleps = GetLogEpsilon<DoubleType>();
-  if (fx < pleps)
-  {
+  if (fx < pleps) {
 // only applicable to double precision
 #if defined(__ANDROID__)
-    if (fx < 1.0e-4)
-    {
+    if (fx < 1.0e-4) {
       DoubleType d = 1.0;
       DoubleType xv = x;
-      d += 1./2. * xv;
+      d += 1. / 2. * xv;
       xv *= x;
-      d += 1./6. * xv;
+      d += 1. / 6. * xv;
       xv *= x;
-      d += 1./24. * xv;
+      d += 1. / 24. * xv;
       ret = 1.0 / d;
-    }
-    else
-    {
+    } else {
       const auto ex1 = exp(x) - 1.0;
       ret = x / ex1;
     }
 #else
     const auto ex1 = expm1(x);
-    if (x != ex1)
-    {
+    if (x != ex1) {
       ret = x * pow(ex1, -1);
-    }
-    else
-    {
+    } else {
       DoubleType d = 1.0 + 0.5 * x;
 #if 0
       // this terms did not affect testing
@@ -65,13 +54,9 @@ DoubleType BernoulliImpl(DoubleType x)
       ret = 1.0 / d;
     }
 #endif
-  }
-  else if (x > 0.0)
-  {
+  } else if (x > 0.0) {
     ret = x * exp(-x);
-  }
-  else
-  {
+  } else {
     ret = -x;
   }
 
@@ -82,35 +67,27 @@ DoubleType BernoulliImpl(DoubleType x)
 first get working with expm1, then expand to extended precision
 work on simplification at limits later if profiling reveals performance issues
 */
-template <typename DoubleType>
-DoubleType Bernoulli(DoubleType x)
-{
+template <typename DoubleType> DoubleType Bernoulli(DoubleType x) {
   DoubleType ret = 1.0;
 
   // TODO: need proper representation of 0 for quad precision
-  if (x != 0.0)
-  {
+  if (x != 0.0) {
     ret = BernoulliImpl<DoubleType>(x);
   }
 
   return ret;
 }
 
-
 // for the non-trivial case where x != 0.0
-template <typename DoubleType>
-DoubleType derBernoulliImpl(DoubleType x)
-{
+template <typename DoubleType> DoubleType derBernoulliImpl(DoubleType x) {
   static const auto pleps = GetLogEpsilon<DoubleType>();
   const auto fx = fabs(x);
 
   DoubleType ret = -0.5;
-  if (fx < pleps)
-  {
+  if (fx < pleps) {
 #if defined(__ANDROID__)
     // this is currently only for double precision based on prior work
-    if (fx < 1.0e-4)
-    {
+    if (fx < 1.0e-4) {
       auto b = Bernoulli<DoubleType>(x);
       ret = -b * b;
 
@@ -121,9 +98,7 @@ DoubleType derBernoulliImpl(DoubleType x)
       xv *= x;
       num -= xv / static_cast<DoubleType>(8.);
       ret *= num;
-    }
-    else
-    {
+    } else {
       const auto ex = exp(x);
       const auto ex1 = ex - 1;
       ret = ex1 - (x * ex);
@@ -133,18 +108,16 @@ DoubleType derBernoulliImpl(DoubleType x)
     const auto ex1 = expm1(x);
 
     //// This condition is IMPORTANT for convergence
-    //// TODO: it should be possible to calculate the breakpoint for this condition
-    if (x != ex1)
-    {
+    //// TODO: it should be possible to calculate the breakpoint for this
+    ///condition
+    if (x != ex1) {
       const auto ex2 = ex1 - (x * exp(x));
-  //  const auto ex2 = (1 - x) * exp(x) - 1;
+      //  const auto ex2 = (1 - x) * exp(x) - 1;
       ret = ex2;
       ret *= pow(ex1, -2);
-    }
-    else
-    {
+    } else {
       DoubleType num = static_cast<DoubleType>(-0.5);
-      DoubleType den = static_cast<DoubleType>( 1.0);
+      DoubleType den = static_cast<DoubleType>(1.0);
       num -= x / static_cast<DoubleType>(3.);
       den += x;
 #if 0
@@ -155,29 +128,22 @@ DoubleType derBernoulliImpl(DoubleType x)
       ret = num / den;
     }
 #endif
-  }
-  else if (x > 0.0)
-  {
+  } else if (x > 0.0) {
     ret = exp(-x) * (1.0 - x);
-  }
-  else
-  {
-    ret = - 1.0 - x * exp(x);
+  } else {
+    ret = -1.0 - x * exp(x);
   }
 
   return ret;
 }
 
 // TODO: need proper representation of 0, 0.5, 1.0 for quad precision
-template <typename DoubleType>
-DoubleType derBernoulli(DoubleType x)
-{
+template <typename DoubleType> DoubleType derBernoulli(DoubleType x) {
 
   DoubleType ret = -0.5;
 
   //// (exp(x) - 1 - x * exp(x)) / pow(exp(x) - 1, 2)
-  if (x != 0.0)
-  {
+  if (x != 0.0) {
     ret = derBernoulliImpl<DoubleType>(x);
   }
 
@@ -192,8 +158,8 @@ template float128 Bernoulli<float128>(float128);
 template float128 derBernoulli<float128>(float128);
 #endif
 
-
-//// The following code is done using taylor expansions versus using the expm1 function
+//// The following code is done using taylor expansions versus using the expm1
+///function
 #if 0
 #include <cmath>
 using std::abs;

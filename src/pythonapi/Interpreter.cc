@@ -5,33 +5,26 @@ Copyright 2013 DEVSIM LLC
 SPDX-License-Identifier: Apache-2.0
 ***/
 
-#include "Python.h"
 #include "Interpreter.hh"
-#include "dsAssert.hh"
-#include "GetGlobalParameter.hh"
 #include "ControlGIL.hh"
+#include "GetGlobalParameter.hh"
+#include "Python.h"
+#include "dsAssert.hh"
 
-Interpreter::Interpreter()
-{
-}
+Interpreter::Interpreter() {}
 
-Interpreter::~Interpreter()
-{
-}
+Interpreter::~Interpreter() {}
 
-namespace
-{
-PyObject *GetGlobalDictionary()
-{
+namespace {
+PyObject *GetGlobalDictionary() {
   EnsurePythonGIL gil;
 
-  PyObject *main    = PyImport_ImportModule("__main__");
+  PyObject *main = PyImport_ImportModule("__main__");
   PyObject *globals = PyModule_GetDict(main);
   return globals;
 }
 
-PyObject *GetDevsimDictionary()
-{
+PyObject *GetDevsimDictionary() {
   EnsurePythonGIL gil;
 
   std::string module_name = TOSTRING(DEVSIM_MODULE_NAME);
@@ -39,19 +32,18 @@ PyObject *GetDevsimDictionary()
 
   PyObject *devsim = nullptr;
   devsim = PyImport_ImportModule(long_module_name.c_str());
-  if (!devsim)
-  {
+  if (!devsim) {
     devsim = PyImport_ImportModule(module_name.c_str());
   }
 
-  //PyErr_Print();
+  // PyErr_Print();
   dsAssert(devsim, std::string("Issue loading module ") + module_name);
   PyObject *globals = PyModule_GetDict(devsim);
   return globals;
 }
 
-ObjectHolder GetCommandFromInterpreter(const std::string &commandname, std::string &error_string)
-{
+ObjectHolder GetCommandFromInterpreter(const std::string &commandname,
+                                       std::string &error_string) {
   EnsurePythonGIL gil;
 
   ObjectHolder ret;
@@ -60,42 +52,36 @@ ObjectHolder GetCommandFromInterpreter(const std::string &commandname, std::stri
 
   std::string search_name;
 
-  if (commandname.find("ds.") == 0)
-  {
-    globals     = GetDevsimDictionary();
+  if (commandname.find("ds.") == 0) {
+    globals = GetDevsimDictionary();
     search_name = commandname.substr(3);
-  }
-  else
-  {
+  } else {
     globals = GetGlobalDictionary();
     search_name = commandname;
   }
 
   ObjectHolder cno(search_name);
 
-  if (!PyDict_Contains(globals, reinterpret_cast<PyObject *>(cno.GetObject())))
-  {
-    error_string =  commandname + " not found";
+  if (!PyDict_Contains(globals,
+                       reinterpret_cast<PyObject *>(cno.GetObject()))) {
+    error_string = commandname + " not found";
     return ret;
   }
 
-  PyObject *fobj = PyDict_GetItem(globals, reinterpret_cast<PyObject *>(cno.GetObject()));
+  PyObject *fobj =
+      PyDict_GetItem(globals, reinterpret_cast<PyObject *>(cno.GetObject()));
 
-  if (PyCallable_Check(fobj))
-  {
+  if (PyCallable_Check(fobj)) {
     Py_INCREF(fobj);
     ret = ObjectHolder(fobj);
-  }
-  else
-  {
+  } else {
     error_string += commandname + " not callable";
   }
   return ret;
 }
 
-
-ObjectHolder CreateTuple(std::vector<ObjectHolder> &objects, size_t beg, size_t len)
-{
+ObjectHolder CreateTuple(std::vector<ObjectHolder> &objects, size_t beg,
+                         size_t len) {
   EnsurePythonGIL gil;
 
   ObjectHolder ret;
@@ -103,8 +89,7 @@ ObjectHolder CreateTuple(std::vector<ObjectHolder> &objects, size_t beg, size_t 
   PyObject *args = PyTuple_New(len);
   ret = ObjectHolder(args);
 
-  for (size_t i = 0; i < len; ++i)
-  {
+  for (size_t i = 0; i < len; ++i) {
     PyObject *p = reinterpret_cast<PyObject *>(objects[beg + i].GetObject());
     // PyTuple_SetItem steals a reference
     Py_INCREF(p);
@@ -131,12 +116,10 @@ ObjectHolder CreateDictionary(const std::vector<std::pair<std::string, ObjectHol
 }
 #endif
 
-void ProcessError(const std::string &commandname, std::string &error_string)
-{
+void ProcessError(const std::string &commandname, std::string &error_string) {
   EnsurePythonGIL gil;
 
-  if (PyErr_Occurred())
-  {
+  if (PyErr_Occurred()) {
     PyObject *ptype;
     PyObject *pvalue;
     PyObject *ptraceback;
@@ -148,10 +131,10 @@ void ProcessError(const std::string &commandname, std::string &error_string)
     error_string += type.GetString() + "\n" + value.GetString() + "\n";
   }
 }
-}
+} // namespace
 
-bool Interpreter::RunCommand(ObjectHolder &procedure, std::vector<ObjectHolder> &objects)
-{
+bool Interpreter::RunCommand(ObjectHolder &procedure,
+                             std::vector<ObjectHolder> &objects) {
   EnsurePythonGIL gil;
 
   bool ret = false;
@@ -160,14 +143,13 @@ bool Interpreter::RunCommand(ObjectHolder &procedure, std::vector<ObjectHolder> 
   ObjectHolder args = CreateTuple(objects, 0, objects.size());
 
   PyErr_Clear();
-  PyObject *robj = PyObject_Call(reinterpret_cast<PyObject *>(procedure.GetObject()), reinterpret_cast<PyObject *>(args.GetObject()), nullptr);
+  PyObject *robj =
+      PyObject_Call(reinterpret_cast<PyObject *>(procedure.GetObject()),
+                    reinterpret_cast<PyObject *>(args.GetObject()), nullptr);
   result_ = ObjectHolder(robj);
-  if (robj)
-  {
+  if (robj) {
     ret = true;
-  }
-  else
-  {
+  } else {
     ret = false;
     ProcessError("Python Command", error_string_);
   }
@@ -175,8 +157,9 @@ bool Interpreter::RunCommand(ObjectHolder &procedure, std::vector<ObjectHolder> 
   return ret;
 }
 
-bool Interpreter::RunInternalCommand(const std::string &commandname, const std::vector<std::pair<std::string, ObjectHolder> > &arguments)
-{
+bool Interpreter::RunInternalCommand(
+    const std::string &commandname,
+    const std::vector<std::pair<std::string, ObjectHolder>> &arguments) {
   EnsurePythonGIL gil;
 
   std::string newname;
@@ -189,8 +172,8 @@ bool Interpreter::RunInternalCommand(const std::string &commandname, const std::
   return RunCommand(newname, omap);
 }
 
-bool Interpreter::RunCommand(ObjectHolder &procedure, ObjectHolderMap_t &arguments)
-{
+bool Interpreter::RunCommand(ObjectHolder &procedure,
+                             ObjectHolderMap_t &arguments) {
   EnsurePythonGIL gil;
 
   bool ret = false;
@@ -202,39 +185,35 @@ bool Interpreter::RunCommand(ObjectHolder &procedure, ObjectHolderMap_t &argumen
 
   PyObject *args = PyTuple_New(0);
   ObjectHolder args_holder(args);
-  PyObject *robj = PyObject_Call(reinterpret_cast<PyObject *>(procedure.GetObject()), args, reinterpret_cast<PyObject *>(kwargs.GetObject()));
+  PyObject *robj =
+      PyObject_Call(reinterpret_cast<PyObject *>(procedure.GetObject()), args,
+                    reinterpret_cast<PyObject *>(kwargs.GetObject()));
   result_ = ObjectHolder(robj);
-  if (robj)
-  {
+  if (robj) {
     ret = true;
-  }
-  else
-  {
+  } else {
     ret = false;
     ProcessError("Python Command", error_string_);
   }
   return ret;
 }
 
-bool Interpreter::RunCommand(const std::string &commandname, ObjectHolderMap_t &arguments)
-{
+bool Interpreter::RunCommand(const std::string &commandname,
+                             ObjectHolderMap_t &arguments) {
   bool ret = false;
   error_string_.clear();
 
-
-  ObjectHolder command_object = GetCommandFromInterpreter(commandname, error_string_);
-  if (!error_string_.empty())
-  {
+  ObjectHolder command_object =
+      GetCommandFromInterpreter(commandname, error_string_);
+  if (!error_string_.empty()) {
     ret = false;
     return ret;
   }
 
   return RunCommand(command_object, arguments);
-
 }
 
-std::string Interpreter::GetVariable(const std::string &name)
-{
+std::string Interpreter::GetVariable(const std::string &name) {
   EnsurePythonGIL gil;
 
   std::string ret;
@@ -242,10 +221,8 @@ std::string Interpreter::GetVariable(const std::string &name)
   ObjectHolder main_holder(main);
   PyObject *robj = PyObject_GetAttrString(main, name.c_str());
   ObjectHolder ro(robj);
-  if (robj)
-  {
+  if (robj) {
     ret = ro.GetString();
   }
   return ret;
 }
-

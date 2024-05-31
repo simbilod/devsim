@@ -10,22 +10,21 @@ SPDX-License-Identifier: Apache-2.0
 
 #include "TriangleEdgeModel.hh"
 
-template <typename T>
-class Vector;
+template <typename T> class Vector;
 
 // Coupling length
 template <typename DoubleType>
 class TriangleEdgeCouple : public TriangleEdgeModel {
-    public:
-        TriangleEdgeCouple(RegionPtr);
+public:
+  TriangleEdgeCouple(RegionPtr);
 
-        void Serialize(std::ostream &) const;
+  void Serialize(std::ostream &) const;
 
-    private:
-        TriangleEdgeCouple();
-        TriangleEdgeCouple(const TriangleEdgeCouple &);
-        TriangleEdgeCouple &operator=(const TriangleEdgeCouple &);
-        Vector<DoubleType> calcTriangleEdgeCouple(ConstTrianglePtr) const;
-        void calcTriangleEdgeScalarValues() const;
+private:
+  TriangleEdgeCouple();
+  TriangleEdgeCouple(const TriangleEdgeCouple &);
+  TriangleEdgeCouple &operator=(const TriangleEdgeCouple &);
+  Vector<DoubleType> calcTriangleEdgeCouple(ConstTrianglePtr) const;
+  void calcTriangleEdgeScalarValues() const;
 };
 #endif

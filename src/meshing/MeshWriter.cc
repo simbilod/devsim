@@ -9,13 +9,13 @@ SPDX-License-Identifier: Apache-2.0
 
 MeshWriter::~MeshWriter() {}
 
-bool MeshWriter::WriteMesh(const std::string &deviceName, const std::string &filename, std::string &errorString)
-{
-    return this->WriteMesh_(deviceName, filename, errorString);
+bool MeshWriter::WriteMesh(const std::string &deviceName,
+                           const std::string &filename,
+                           std::string &errorString) {
+  return this->WriteMesh_(deviceName, filename, errorString);
 }
 
-bool MeshWriter::WriteMeshes(const std::string &filename, std::string &errorString)
-{
-    return this->WriteMeshes_(filename, errorString);
+bool MeshWriter::WriteMeshes(const std::string &filename,
+                             std::string &errorString) {
+  return this->WriteMeshes_(filename, errorString);
 }
-

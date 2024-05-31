@@ -15,72 +15,66 @@ SPDX-License-Identifier: Apache-2.0
 //#include <iostream>
 namespace dsMath {
 template <typename DoubleType>
-DirectLinearSolver<DoubleType>::DirectLinearSolver()
-{}
+DirectLinearSolver<DoubleType>::DirectLinearSolver() {}
 
 namespace {
-void WriteOutProblem(bool factored, bool solved)
-{
+void WriteOutProblem(bool factored, bool solved) {
   std::ostringstream os;
-  if (!factored)
-  {
+  if (!factored) {
     os << "Matrix factorization failed\n";
-  }
-  else if (!solved)
-  {
+  } else if (!solved) {
     os << "Matrix solve failed\n";
   }
   OutputStream::WriteOut(OutputStream::OutputType::INFO, os.str());
 }
-}
+} // namespace
 
 template <typename DoubleType>
-bool DirectLinearSolver<DoubleType>::SolveImpl(Matrix<DoubleType> &mat, Preconditioner<DoubleType> &pre, std::vector<DoubleType> &sol, std::vector<DoubleType> &rhs)
-{
+bool DirectLinearSolver<DoubleType>::SolveImpl(Matrix<DoubleType> &mat,
+                                               Preconditioner<DoubleType> &pre,
+                                               std::vector<DoubleType> &sol,
+                                               std::vector<DoubleType> &rhs) {
 
   std::string what;
   bool ret = false;
   bool solved = false;
-//std::cerr << "Begin LUFactor Matrix\n";
+  // std::cerr << "Begin LUFactor Matrix\n";
 
   bool factored = pre.LUFactor(&mat);
-//std::cerr << "End LUFactor Matrix\n";
-//std::cerr << "Begin LUSolve Matrix\n";
+  // std::cerr << "End LUFactor Matrix\n";
+  // std::cerr << "Begin LUSolve Matrix\n";
 
-  if (factored)
-  {
+  if (factored) {
     solved = pre.LUSolve(sol, rhs);
   }
 
   ret = factored && solved;
 
-  if (!ret)
-  {
+  if (!ret) {
     WriteOutProblem(factored, solved);
   }
 
-//std::cerr << "End LUFactor Matrix\n";
+  // std::cerr << "End LUFactor Matrix\n";
 
   return ret;
 }
 
 template <typename DoubleType>
-bool DirectLinearSolver<DoubleType>::ACSolveImpl(Matrix<DoubleType> &mat, Preconditioner<DoubleType> &pre, ComplexDoubleVec_t<DoubleType> &sol, ComplexDoubleVec_t<DoubleType> &rhs)
-{
+bool DirectLinearSolver<DoubleType>::ACSolveImpl(
+    Matrix<DoubleType> &mat, Preconditioner<DoubleType> &pre,
+    ComplexDoubleVec_t<DoubleType> &sol, ComplexDoubleVec_t<DoubleType> &rhs) {
   bool ret = false;
   bool solved = false;
 
   bool factored = pre.LUFactor(&mat);
 
-  if (factored)
-  {
+  if (factored) {
     solved = pre.LUSolve(sol, rhs);
   }
 
   ret = factored && solved;
 
-  if (!ret)
-  {
+  if (!ret) {
     WriteOutProblem(factored, solved);
   }
 
@@ -88,32 +82,30 @@ bool DirectLinearSolver<DoubleType>::ACSolveImpl(Matrix<DoubleType> &mat, Precon
 }
 
 template <typename DoubleType>
-bool DirectLinearSolver<DoubleType>::NoiseSolveImpl(Matrix<DoubleType> &mat, Preconditioner<DoubleType> &pre, ComplexDoubleVec_t<DoubleType> &sol, ComplexDoubleVec_t<DoubleType> &rhs)
-{
+bool DirectLinearSolver<DoubleType>::NoiseSolveImpl(
+    Matrix<DoubleType> &mat, Preconditioner<DoubleType> &pre,
+    ComplexDoubleVec_t<DoubleType> &sol, ComplexDoubleVec_t<DoubleType> &rhs) {
   bool ret = false;
   bool solved = false;
 
   bool factored = pre.LUFactor(&mat);
 
-  if (factored)
-  {
+  if (factored) {
     solved = pre.LUSolve(sol, rhs);
   }
 
   ret = factored && solved;
 
-  if (!ret)
-  {
+  if (!ret) {
     WriteOutProblem(factored, solved);
   }
 
   return ret;
 }
-}
+} // namespace dsMath
 
 template class dsMath::DirectLinearSolver<double>;
 #ifdef DEVSIM_EXTENDED_PRECISION
 #include "Float128.hh"
 template class dsMath::DirectLinearSolver<float128>;
 #endif
-

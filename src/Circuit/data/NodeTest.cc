@@ -5,16 +5,15 @@ Copyright 2013 DEVSIM LLC
 SPDX-License-Identifier: Apache-2.0
 ***/
 
-
-#include <iostream>
 #include "NodeKeeper.hh"
+#include <iostream>
 
 int main() {
-    NodeKeeper &inst = NodeKeeper::instance();
-    inst.AddNode("foo");
-    inst.AddNode("cat");
-//    inst.DeleteNode("dog");
-    inst.SetNodeNumbers();
-    inst.CreateSolution("dcop");
-    return 0;
+  NodeKeeper &inst = NodeKeeper::instance();
+  inst.AddNode("foo");
+  inst.AddNode("cat");
+  //    inst.DeleteNode("dog");
+  inst.SetNodeNumbers();
+  inst.CreateSolution("dcop");
+  return 0;
 }

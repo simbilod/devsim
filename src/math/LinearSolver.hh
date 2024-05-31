@@ -21,32 +21,40 @@ SPDX-License-Identifier: Apache-2.0
 // 3. return x = inv(P) y
 
 namespace dsMath {
-template <typename DoubleType>
-class Matrix;
-template <typename DoubleType>
-class Preconditioner;
+template <typename DoubleType> class Matrix;
+template <typename DoubleType> class Preconditioner;
 /// This is the linear solver (inside the newton loop)
-template <typename DoubleType>
-class LinearSolver {
-    public:
-       virtual ~LinearSolver() = 0;
+template <typename DoubleType> class LinearSolver {
+public:
+  virtual ~LinearSolver() = 0;
 
-       bool Solve(Matrix<DoubleType> &, Preconditioner<DoubleType> &, DoubleVec_t<DoubleType> &, DoubleVec_t<DoubleType> & );
-       bool ACSolve(Matrix<DoubleType> &, Preconditioner<DoubleType> &, ComplexDoubleVec_t<DoubleType> &, ComplexDoubleVec_t<DoubleType> & );
-       bool NoiseSolve(Matrix<DoubleType> &, Preconditioner<DoubleType> &, ComplexDoubleVec_t<DoubleType> &, ComplexDoubleVec_t<DoubleType> & );
+  bool Solve(Matrix<DoubleType> &, Preconditioner<DoubleType> &,
+             DoubleVec_t<DoubleType> &, DoubleVec_t<DoubleType> &);
+  bool ACSolve(Matrix<DoubleType> &, Preconditioner<DoubleType> &,
+               ComplexDoubleVec_t<DoubleType> &,
+               ComplexDoubleVec_t<DoubleType> &);
+  bool NoiseSolve(Matrix<DoubleType> &, Preconditioner<DoubleType> &,
+                  ComplexDoubleVec_t<DoubleType> &,
+                  ComplexDoubleVec_t<DoubleType> &);
 
-    protected:
-        LinearSolver();
-    private:
-       virtual bool SolveImpl(Matrix<DoubleType> &, Preconditioner<DoubleType> &, DoubleVec_t<DoubleType> &, DoubleVec_t<DoubleType> & )=0;
-       virtual bool ACSolveImpl(Matrix<DoubleType> &, Preconditioner<DoubleType> &, ComplexDoubleVec_t<DoubleType> &, ComplexDoubleVec_t<DoubleType> & )=0;
-       virtual bool NoiseSolveImpl(Matrix<DoubleType> &, Preconditioner<DoubleType> &, ComplexDoubleVec_t<DoubleType> &, ComplexDoubleVec_t<DoubleType> & )=0;
+protected:
+  LinearSolver();
 
-       LinearSolver(const LinearSolver &);
-       LinearSolver &operator=(const LinearSolver &);
+private:
+  virtual bool SolveImpl(Matrix<DoubleType> &, Preconditioner<DoubleType> &,
+                         DoubleVec_t<DoubleType> &,
+                         DoubleVec_t<DoubleType> &) = 0;
+  virtual bool ACSolveImpl(Matrix<DoubleType> &, Preconditioner<DoubleType> &,
+                           ComplexDoubleVec_t<DoubleType> &,
+                           ComplexDoubleVec_t<DoubleType> &) = 0;
+  virtual bool NoiseSolveImpl(Matrix<DoubleType> &,
+                              Preconditioner<DoubleType> &,
+                              ComplexDoubleVec_t<DoubleType> &,
+                              ComplexDoubleVec_t<DoubleType> &) = 0;
 
+  LinearSolver(const LinearSolver &);
+  LinearSolver &operator=(const LinearSolver &);
 };
-}
+} // namespace dsMath
 
 #endif
-

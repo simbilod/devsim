@@ -12,20 +12,18 @@ SPDX-License-Identifier: Apache-2.0
 EdgeModelPtr CreateCylindricalEdgeCouple(RegionPtr);
 
 // Coupling length
-template <typename DoubleType>
-class CylindricalEdgeCouple : public EdgeModel {
-    public:
-        CylindricalEdgeCouple(RegionPtr);
+template <typename DoubleType> class CylindricalEdgeCouple : public EdgeModel {
+public:
+  CylindricalEdgeCouple(RegionPtr);
 
-        void Serialize(std::ostream &) const;
+  void Serialize(std::ostream &) const;
 
-    private:
-        CylindricalEdgeCouple();
-        CylindricalEdgeCouple(const CylindricalEdgeCouple &);
-        CylindricalEdgeCouple &operator=(const CylindricalEdgeCouple &);
-        void calcCylindricalEdgeCouple2d() const;
-        void calcCylindricalEdgeCouple3d() const;
-        void calcEdgeScalarValues() const;
+private:
+  CylindricalEdgeCouple();
+  CylindricalEdgeCouple(const CylindricalEdgeCouple &);
+  CylindricalEdgeCouple &operator=(const CylindricalEdgeCouple &);
+  void calcCylindricalEdgeCouple2d() const;
+  void calcCylindricalEdgeCouple3d() const;
+  void calcEdgeScalarValues() const;
 };
 #endif
-

@@ -31,17 +31,17 @@ http://math.nist.gov/iml++/gmres.h.txt
 #define IML_GMRES_HH
 #include "dsMathTypes.hh"
 namespace dsMath {
-template <typename DoubleType>
-class Matrix;
-template <typename DoubleType>
-class Preconditioner;
-int GMRES(const Matrix<double> &A, DoubleVec_t<double> &x, const DoubleVec_t<double> &b, const Preconditioner<double> &M, int &m, int &max_iter, double &tol);
-}
+template <typename DoubleType> class Matrix;
+template <typename DoubleType> class Preconditioner;
+int GMRES(const Matrix<double> &A, DoubleVec_t<double> &x,
+          const DoubleVec_t<double> &b, const Preconditioner<double> &M, int &m,
+          int &max_iter, double &tol);
+} // namespace dsMath
 namespace iml {
-template < class Operator, class Vector, class Preconditioner,
-           class Matrix, class Real >
-int GMRES(const Operator &A, Vector &x, const Vector &b, const Preconditioner &M, Matrix &H, int &m, int &max_iter, Real &tol);
+template <class Operator, class Vector, class Preconditioner, class Matrix,
+          class Real>
+int GMRES(const Operator &A, Vector &x, const Vector &b,
+          const Preconditioner &M, Matrix &H, int &m, int &max_iter, Real &tol);
 
 }
 #endif
-
